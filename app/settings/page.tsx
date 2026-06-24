@@ -91,6 +91,16 @@ export default function SettingsPage() {
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-600 mb-1">主責個管員身分證號</label>
+            <input
+              type="text"
+              value={settings.managerIdNumber}
+              onChange={e => updateSettings({ managerIdNumber: e.target.value })}
+              placeholder="供衛生局電訪報表使用"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
+            />
+          </div>
         </div>
         <button
           onClick={handleSave}

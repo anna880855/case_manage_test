@@ -2,7 +2,8 @@
 import { useState, useMemo, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
-import type { Case, Sentence } from '@/lib/types'
+import type { Case, Sentence, HealthBureauFields } from '@/lib/types'
+import { EMPTY_HEALTH_BUREAU_FIELDS } from '@/lib/types'
 import { AI_STYLE_GUIDE } from '@/lib/aiStyle'
 
 const CATEGORIES = ['service', 'physical', 'family', 'plan'] as const
@@ -139,6 +140,7 @@ function PhoneVisitContent() {
 
   const [goalTracking, setGoalTracking] = useState<Record<GoalKey, { status: string; percent: string }>>({ ...EMPTY_GOAL_TRACKING })
   const goalLabels = GOAL_LABELS
+  const [hb, setHb] = useState<HealthBureauFields>({ ...EMPTY_HEALTH_BUREAU_FIELDS })
 
   const pickRandom = (pool: Sentence[], exclude?: string) => {
     const others = exclude ? pool.filter(s => s.text !== exclude) : pool
@@ -213,6 +215,7 @@ function PhoneVisitContent() {
     setTarget(prevTarget || c?.guardian || '')
     setPlanBlock(prevVisits.length > 0 ? parsePlanBlock(prevVisits[0].content) : { ...PLAN_DEFAULTS })
     setGoalTracking(prevVisits.length > 0 ? parseGoalBlock(prevVisits[0].content) : { ...EMPTY_GOAL_TRACKING })
+    setHb({ ...EMPTY_HEALTH_BUREAU_FIELDS })
     autoSelect(c)
   }
 
@@ -313,7 +316,7 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
       content: generated,
       createdAt: new Date().toISOString(),
     }
-    addPhoneVisit(visit)
+    addPhoneVisit({ ...visit, healthBureau: hb })
     updateCase(selectedCase.id, { lastPhoneVisitDate: `${date} ${time}`, lastPhoneVisitContent: generated })
     setSaved(true)
     setError('')
@@ -560,6 +563,139 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
                   <input
                     value={planBlock[key]}
                     onChange={e => setPlanBlock(p => ({ ...p, [key]: e.target.value }))}
+                    className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 衛生局申報資料 */}
+          <div className="bg-white rounded-xl border border-gray-100 p-4">
+            <label className="block text-sm font-semibold text-gray-700 mb-3">
+              衛生局申報資料
+              <span className="font-normal text-gray-400 ml-1">（供每月電訪紀錄上傳衛生局系統使用）</span>
+            </label>
+
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-1">服務項目</p>
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                  {([
+                    ['adjustPlan', '調整照顧計畫【不涉及額度變更】'],
+                    ['consultComplaint', '接受長照需要者及其家屬有關長照服務諮詢、申訴與處理'],
+                    ['referral', '照會或連結至服務提供單位'],
+                    ['other', '其他(執行服務計畫、專業服務新增、延案或結案、更換社區整合型服務中心、其他等)'],
+                  ] as const).map(([key, label]) => (
+                    <label key={key} className="flex items-center gap-1.5 text-sm text-gray-600">
+                      <input
+                        type="checkbox"
+                        checked={hb.serviceItems[key]}
+                        onChange={e => setHb(p => ({ ...p, serviceItems: { ...p.serviceItems, [key]: e.target.checked } }))}
+                        className="accent-[#7a9985]"
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+                {hb.serviceItems.other && (
+                  <input
+                    value={hb.serviceItems.otherNote}
+                    onChange={e => setHb(p => ({ ...p, serviceItems: { ...p.serviceItems, otherNote: e.target.value } }))}
+                    placeholder="其他服務項目說明"
+                    className="mt-1.5 w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
+                  />
+                )}
+              </div>
+
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-1">服務重點</p>
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                  {([
+                    ['trackLinkage', '追蹤長照需要者與各項服務之連結情形'],
+                    ['planDiscussion', '計畫與內容異動討論'],
+                    ['resourceLink', '協助長照需要者或其家屬其他資源連結'],
+                    ['consultComplaint', '接受長照需要者及其家屬有關長照服務諮詢、申訴與處理'],
+                    ['acceptComplaint', '接受申訴'],
+                    ['other', '其他'],
+                  ] as const).map(([key, label]) => (
+                    <label key={key} className="flex items-center gap-1.5 text-sm text-gray-600">
+                      <input
+                        type="checkbox"
+                        checked={hb.serviceFocus[key]}
+                        onChange={e => setHb(p => ({ ...p, serviceFocus: { ...p.serviceFocus, [key]: e.target.checked } }))}
+                        className="accent-[#7a9985]"
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+                {hb.serviceFocus.other && (
+                  <input
+                    value={hb.serviceFocus.otherNote}
+                    onChange={e => setHb(p => ({ ...p, serviceFocus: { ...p.serviceFocus, otherNote: e.target.value } }))}
+                    placeholder="服務重點其他備註"
+                    className="mt-1.5 w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
+                  />
+                )}
+              </div>
+
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-1">服務對象</p>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-1.5 text-sm text-gray-600">
+                    <input
+                      type="checkbox"
+                      checked={hb.serviceTarget.user}
+                      onChange={e => setHb(p => ({ ...p, serviceTarget: { ...p.serviceTarget, user: e.target.checked } }))}
+                      className="accent-[#7a9985]"
+                    />
+                    服務使用者
+                  </label>
+                  <label className="flex items-center gap-1.5 text-sm text-gray-600">
+                    <input
+                      type="checkbox"
+                      checked={hb.serviceTarget.caregiver}
+                      onChange={e => setHb(p => ({ ...p, serviceTarget: { ...p.serviceTarget, caregiver: e.target.checked } }))}
+                      className="accent-[#7a9985]"
+                    />
+                    家庭照顧者
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex gap-3 items-end">
+                <label className="flex items-center gap-1.5 text-sm text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={hb.remindSupervisor}
+                    onChange={e => setHb(p => ({ ...p, remindSupervisor: e.target.checked }))}
+                    className="accent-[#7a9985]"
+                  />
+                  提醒照專
+                </label>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">提醒自己何時再查看日期</label>
+                  <input
+                    type="date"
+                    value={hb.nextCheckDate}
+                    onChange={e => setHb(p => ({ ...p, nextCheckDate: e.target.value }))}
+                    className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
+                  />
+                </div>
+              </div>
+
+              {([
+                ['trackingAdaptation', '追蹤服務適應與介入情形'],
+                ['goalAchievement', '各項服務目標及整體計畫目標達成情形'],
+                ['planAppropriateness', '整體計畫的適切性及需求異動'],
+                ['otherHandling', '其他處理事項'],
+              ] as const).map(([key, label]) => (
+                <div key={key}>
+                  <label className="block text-xs text-gray-500 mb-1">{label}</label>
+                  <input
+                    value={hb[key]}
+                    onChange={e => setHb(p => ({ ...p, [key]: e.target.value }))}
                     className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
                   />
                 </div>

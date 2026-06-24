@@ -112,6 +112,7 @@ export const useStore = create<StoreState & StoreActions>()(
         organizationName: '',
         managerName: '林侑萱',
         managerPhone: '0902692567',
+        managerIdNumber: '',
         phoneVisitSheetName: '電訪紀錄',
         homeVisitSheetName: '家訪紀錄',
       },
@@ -191,7 +192,7 @@ export const useStore = create<StoreState & StoreActions>()(
     }),
     {
       name: 'case-mgmt-v1',
-      version: 8,
+      version: 9,
       migrate: (persistedState: unknown, version: number) => {
         let state = persistedState as StoreState & StoreActions
         if (version < 2) {
@@ -238,6 +239,11 @@ export const useStore = create<StoreState & StoreActions>()(
             ...state,
             cases: existing.map(({ homeVisitIntervalMonths, ...rest }) => rest),
           }
+        }
+        if (version < 9) {
+          const s = (state.settings || {}) as unknown as Record<string, unknown>
+          if (!s.managerIdNumber) s.managerIdNumber = ''
+          state = { ...state, settings: s as unknown as Settings }
         }
         return state
       },
