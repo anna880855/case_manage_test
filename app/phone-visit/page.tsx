@@ -608,6 +608,21 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
             </div>
           </div>
 
+          {/* 補充說明 */}
+          <div className="bg-white rounded-xl border border-gray-100 p-4">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              個案其他狀況補充
+              <span className="font-normal text-gray-400 ml-1">（選填，AI 會一併融入電訪紀錄）</span>
+            </label>
+            <textarea
+              value={customNote}
+              onChange={e => setCustomNote(e.target.value)}
+              placeholder="例：個案本週回診，醫師調整血壓藥劑量；照顧者反應近期較疲憊，詢問喘息服務…"
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa] resize-none"
+            />
+          </div>
+
           {/* 產生按鈕 */}
           <div className="flex gap-3">
             <button
@@ -748,21 +763,6 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
                 </div>
               ))}
             </div>
-          </div>
-
-          {/* 補充說明 */}
-          <div className="bg-white rounded-xl border border-gray-100 p-4">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              個案其他狀況補充
-              <span className="font-normal text-gray-400 ml-1">（選填，AI 會一併融入電訪紀錄）</span>
-            </label>
-            <textarea
-              value={customNote}
-              onChange={e => setCustomNote(e.target.value)}
-              placeholder="例：個案本週回診，醫師調整血壓藥劑量；照顧者反應近期較疲憊，詢問喘息服務…"
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa] resize-none"
-            />
           </div>
 
           {error && (
