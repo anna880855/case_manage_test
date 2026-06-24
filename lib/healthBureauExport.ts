@@ -48,10 +48,9 @@ const PLAN_MARKER = '一、照顧及專業服務：'
  * 這裡依固定段落標記拆出三段，分別對應衛生局報表的三個文字欄位。
  */
 export function splitContent(content: string): { narrative: string; goalBlock: string; planBlock: string } {
-  const afterHeader = content.split('三、訪談內容：')[1] ?? content
-  const planIdx = afterHeader.indexOf(PLAN_MARKER)
-  const beforePlan = planIdx !== -1 ? afterHeader.slice(0, planIdx) : afterHeader
-  const planBlock = planIdx !== -1 ? afterHeader.slice(planIdx).trim() : ''
+  const planIdx = content.indexOf(PLAN_MARKER)
+  const beforePlan = planIdx !== -1 ? content.slice(0, planIdx) : content
+  const planBlock = planIdx !== -1 ? content.slice(planIdx).trim() : ''
 
   let goalIdx = -1
   for (const marker of GOAL_MARKERS) {
