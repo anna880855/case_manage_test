@@ -608,6 +608,32 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
             </div>
           </div>
 
+          {/* 產生按鈕 */}
+          <div className="flex gap-3">
+            <button
+              onClick={handleQuickCombine}
+              disabled={!selectedCaseId || pickedSentences.length === 0 || !hasSentences}
+              className="flex-1 py-3 bg-white border-2 border-[#7a9985] text-[#7a9985] rounded-xl font-semibold hover:bg-[#e6ede7] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              ⚡ 直接組合
+            </button>
+            <button
+              onClick={handleGenerate}
+              disabled={generating || !selectedCaseId || pickedSentences.length === 0 || !hasSentences}
+              className="flex-1 py-3 bg-[#7a9985] text-white rounded-xl font-semibold hover:bg-[#50665b] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+            >
+              {generating ? (
+                <>
+                  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  AI 改寫中…
+                </>
+              ) : '✨ AI 潤飾'}
+            </button>
+          </div>
+
           {/* 衛生局申報資料 */}
           <div className="bg-white rounded-xl border border-gray-100 p-4">
             <label className="block text-sm font-semibold text-gray-700 mb-3">
@@ -745,65 +771,22 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
 
           <div className="flex gap-3">
             <button
-              onClick={handleQuickCombine}
-              disabled={!selectedCaseId || pickedSentences.length === 0 || !hasSentences}
-              className="flex-1 py-3 bg-white border-2 border-[#7a9985] text-[#7a9985] rounded-xl font-semibold hover:bg-[#e6ede7] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              onClick={() => navigator.clipboard.writeText(generated)}
+              disabled={!generated}
+              className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              ⚡ 直接組合
+              📋 複製
             </button>
             <button
-              onClick={handleGenerate}
-              disabled={generating || !selectedCaseId || pickedSentences.length === 0 || !hasSentences}
-              className="flex-1 py-3 bg-[#7a9985] text-white rounded-xl font-semibold hover:bg-[#50665b] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              onClick={handleSave}
+              disabled={!generated || saved}
+              className={`flex-1 py-3 rounded-xl font-semibold transition-colors ${
+                saved ? 'bg-green-100 text-green-700' : 'bg-[#7a9985] text-white hover:bg-[#50665b] disabled:opacity-40 disabled:cursor-not-allowed'
+              }`}
             >
-              {generating ? (
-                <>
-                  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  AI 改寫中…
-                </>
-              ) : '✨ AI 潤飾'}
+              {saved ? '✓ 已儲存' : '💾 儲存'}
             </button>
           </div>
-
-          {generated && (
-            <div className="bg-white rounded-xl border border-gray-100 p-5">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold text-gray-700">產生結果</h3>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => { setGenerated(''); setSaved(false) }}
-                    className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-500"
-                  >
-                    重新產生
-                  </button>
-                  <button
-                    onClick={() => navigator.clipboard.writeText(generated)}
-                    className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    📋 複製
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={saved}
-                    className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
-                      saved ? 'bg-green-100 text-green-700' : 'bg-[#7a9985] text-white hover:bg-[#50665b]'
-                    }`}
-                  >
-                    {saved ? '✓ 已儲存' : '💾 儲存'}
-                  </button>
-                </div>
-              </div>
-              <textarea
-                value={generated}
-                onChange={e => { setGenerated(e.target.value); setSaved(false) }}
-                rows={12}
-                className="w-full whitespace-pre-wrap text-sm text-gray-700 font-sans leading-relaxed bg-gray-50 rounded-lg p-4 focus:outline-none focus:ring-2 focus:ring-[#a3bcaa] resize-y"
-              />
-            </div>
-          )}
         </div>
       </div>
     </div>
