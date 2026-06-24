@@ -47,8 +47,6 @@ export interface HealthBureauFields {
     user: boolean
     caregiver: boolean
   }
-  remindSupervisor: boolean
-  nextCheckDate: string
   trackingAdaptation: string
   goalAchievement: string
   planAppropriateness: string
@@ -59,8 +57,6 @@ export const EMPTY_HEALTH_BUREAU_FIELDS: HealthBureauFields = {
   serviceItems: { adjustPlan: false, consultComplaint: false, referral: false, other: false, otherNote: '' },
   serviceFocus: { trackLinkage: false, planDiscussion: false, resourceLink: false, consultComplaint: false, acceptComplaint: false, other: false, otherNote: '' },
   serviceTarget: { user: true, caregiver: false },
-  remindSupervisor: false,
-  nextCheckDate: '',
   trackingAdaptation: '',
   goalAchievement: '',
   planAppropriateness: '',

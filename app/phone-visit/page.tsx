@@ -664,27 +664,6 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
                 </div>
               </div>
 
-              <div className="flex gap-3 items-end">
-                <label className="flex items-center gap-1.5 text-sm text-gray-600">
-                  <input
-                    type="checkbox"
-                    checked={hb.remindSupervisor}
-                    onChange={e => setHb(p => ({ ...p, remindSupervisor: e.target.checked }))}
-                    className="accent-[#7a9985]"
-                  />
-                  提醒照專
-                </label>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">提醒自己何時再查看日期</label>
-                  <input
-                    type="date"
-                    value={hb.nextCheckDate}
-                    onChange={e => setHb(p => ({ ...p, nextCheckDate: e.target.value }))}
-                    className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
-                  />
-                </div>
-              </div>
-
               {([
                 ['trackingAdaptation', '追蹤服務適應與介入情形'],
                 ['goalAchievement', '各項服務目標及整體計畫目標達成情形'],
