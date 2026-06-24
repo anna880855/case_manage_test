@@ -5,6 +5,7 @@ import { useStore } from '@/lib/store'
 import type { Case, Sentence, HealthBureauFields } from '@/lib/types'
 import { EMPTY_HEALTH_BUREAU_FIELDS } from '@/lib/types'
 import { AI_STYLE_GUIDE } from '@/lib/aiStyle'
+import { splitContent } from '@/lib/healthBureauExport'
 
 const CATEGORIES = ['service', 'physical', 'family', 'plan'] as const
 type PhoneCategory = typeof CATEGORIES[number]
@@ -245,6 +246,17 @@ function PhoneVisitContent() {
     return lines.join('\n')
   }
 
+  const applyContentToHb = (content: string) => {
+    const { narrative, goalBlock, planBlock } = splitContent(content)
+    setHb(p => ({
+      ...p,
+      trackingAdaptation: narrative,
+      goalAchievement: goalBlock,
+      planAppropriateness: planBlock,
+      otherHandling: p.otherHandling || '無',
+    }))
+  }
+
   const handleQuickCombine = () => {
     if (!selectedCase) { setError('請選擇個案'); return }
     if (pickedSentences.length === 0) { setError('句型庫為空，請先到「設定」頁面按「重設預設句型庫」'); return }
@@ -268,6 +280,7 @@ ${PLAN_LABELS.respite}：${planBlock.respite}
 ${PLAN_LABELS.referral}：${planBlock.referral}`)
     const result = parts.join('\n')
     setGenerated(result)
+    applyContentToHb(result)
     setSaved(false)
     setError('')
   }
@@ -298,6 +311,7 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
         ? `${data.content.slice(0, markerIndex).trimEnd()}\n\n\n${goalBlock}\n\n${data.content.slice(markerIndex)}`
         : data.content + (goalBlock ? `\n\n\n${goalBlock}` : '')
       setGenerated(finalContent)
+      applyContentToHb(finalContent)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '產生失敗，請再試一次')
     } finally {
@@ -694,11 +708,15 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
                 ['otherHandling', '其他處理事項'],
               ] as const).map(([key, label]) => (
                 <div key={key}>
-                  <label className="block text-xs text-gray-500 mb-1">{label}</label>
-                  <input
+                  <label className="block text-xs text-gray-500 mb-1">
+                    {label}
+                    {key !== 'otherHandling' && <span className="text-gray-400">（由電訪內容自動帶入，可手動修改）</span>}
+                  </label>
+                  <textarea
                     value={hb[key]}
                     onChange={e => setHb(p => ({ ...p, [key]: e.target.value }))}
-                    className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
+                    rows={key === 'otherHandling' ? 1 : 3}
+                    className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa] resize-y"
                   />
                 </div>
               ))}

@@ -271,7 +271,9 @@ const PHONE_VISIT_HEADERS = [
   '服務重點-追蹤長照需要者與各項服務之連結情形', '服務重點-計畫與內容異動討論',
   '服務重點-協助長照需要者或其家屬其他資源連結', '服務重點-接受長照需要者及其家屬有關長照服務諮詢、申訴與處理',
   '服務重點-接受申訴', '服務重點-其他', '服務重點-其他備註',
-  '服務對象-服務使用者', '服務對象-家庭照顧者', '其他處理事項', '建立時間',
+  '服務對象-服務使用者', '服務對象-家庭照顧者',
+  '追蹤服務適應與介入情形', '各項服務目標及整體計畫目標達成情形', '整體計畫的適切性及需求異動', '其他處理事項',
+  '建立時間',
 ];
 
 const HOME_VISIT_HEADERS = ['個案姓名', '個案編號', '身分證字號', '家訪日期', '家訪計劃內容', '建立時間'];
@@ -310,7 +312,8 @@ function appendVisitRow(sheetName, record) {
     focus.resourceLink ? 'V' : '', focus.consultComplaint ? 'V' : '',
     focus.acceptComplaint ? 'V' : '', focus.other ? 'V' : '', focus.otherNote || '',
     target.user ? 'V' : '', target.caregiver ? 'V' : '',
-    hb.otherHandling || '', new Date(),
+    hb.trackingAdaptation || '', hb.goalAchievement || '', hb.planAppropriateness || '', hb.otherHandling || '',
+    new Date(),
   ]);
 }
 
