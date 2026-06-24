@@ -367,6 +367,7 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
               target: target || selectedCase.guardian || selectedCase.name,
               content: generated,
               healthBureau: hb,
+              managerIdNumber: settings.managerIdNumber,
             },
           }),
         })

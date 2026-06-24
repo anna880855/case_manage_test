@@ -264,16 +264,35 @@ function deleteCaseRow(caseName, caseNumber) {
 // 電訪／家訪紀錄（每一筆寫入獨立工作表，依設定頁的分頁名稱建立）
 // ====================================================
 
+// 與衛生局範例格式完全一致的 25 欄（A~Y），最後加「個案姓名」一欄供人工辨識，
+// 換電腦時即使本機資料遺失，也能直接用這個分頁的 A:Y 重建衛生局報表。
 const PHONE_VISIT_HEADERS = [
-  '個案姓名', '個案編號', '身分證字號', '電訪日期', '電訪對象', '電訪內容',
-  '服務項目-調整照顧計畫', '服務項目-接受長照需要者及其家屬有關長照服務諮詢、申訴與處理',
-  '服務項目-照會或連結至服務提供單位', '服務項目-其他', '服務項目-其他說明',
-  '服務重點-追蹤長照需要者與各項服務之連結情形', '服務重點-計畫與內容異動討論',
-  '服務重點-協助長照需要者或其家屬其他資源連結', '服務重點-接受長照需要者及其家屬有關長照服務諮詢、申訴與處理',
-  '服務重點-接受申訴', '服務重點-其他', '服務重點-其他備註',
-  '服務對象-服務使用者', '服務對象-家庭照顧者',
-  '追蹤服務適應與介入情形', '各項服務目標及整體計畫目標達成情形', '整體計畫的適切性及需求異動', '其他處理事項',
-  '建立時間',
+  '身分證字號',
+  '服務日期\n(請輸入7碼)',
+  '服務項目-電訪',
+  '服務項目-家訪',
+  '服務項目-調整照顧計畫【不涉及額度變更】',
+  '服務項目-接受長照需要者及其家屬有關長照服務諮詢、申訴與處理',
+  '服務項目-照會或連結至服務提供單位',
+  '服務項目-其他(執行服務計畫、專業服務新增、延案或結案、更換社區整合型服務中心、其他等)',
+  '服務項目-其他服務項目說明',
+  '服務重點-追蹤長照需要者與各項服務之連結情形',
+  '服務重點-計畫與內容異動討論',
+  '服務重點-協助長照需要者或其家屬其他資源連結',
+  '服務重點-接受長照需要者及其家屬有關長照服務諮詢、申訴與處理',
+  '服務重點-接受申訴',
+  '服務重點-其他',
+  '服務重點-其他備註',
+  '服務對象-服務使用者',
+  '服務對象-家庭照顧者',
+  '主責個管員身分證',
+  '提醒照專',
+  '提醒自己何時再查看日期\n(請輸入7碼)',
+  '追蹤服務適應與介入情形',
+  '各項服務目標及整體計畫目標達成情形',
+  '整體計畫的適切性及需求異動',
+  '其他處理事項',
+  '個案姓名',
 ];
 
 const HOME_VISIT_HEADERS = ['個案姓名', '個案編號', '身分證字號', '家訪日期', '家訪計劃內容', '建立時間'];
@@ -286,6 +305,16 @@ function getOrCreateVisitSheet(sheetName, headers) {
     sheet.appendRow(headers);
   }
   return sheet;
+}
+
+function toRocDate(raw) {
+  if (!raw) return '';
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return '';
+  const roc = d.getFullYear() - 1911;
+  const mm = ('0' + (d.getMonth() + 1)).slice(-2);
+  const dd = ('0' + d.getDate()).slice(-2);
+  return '' + roc + mm + dd;
 }
 
 function appendVisitRow(sheetName, record) {
@@ -304,16 +333,19 @@ function appendVisitRow(sheetName, record) {
   const target = hb.serviceTarget || {};
   const sheet = getOrCreateVisitSheet(sheetName, PHONE_VISIT_HEADERS);
   sheet.appendRow([
-    record.caseName || '', record.caseNumber || '', record.idNumber || '',
-    record.date || '', record.target || '', record.content || '',
+    record.idNumber || '',
+    toRocDate(record.date),
+    'V', '',
     items.adjustPlan ? 'V' : '', items.consultComplaint ? 'V' : '',
     items.referral ? 'V' : '', items.other ? 'V' : '', items.otherNote || '',
     focus.trackLinkage ? 'V' : '', focus.planDiscussion ? 'V' : '',
     focus.resourceLink ? 'V' : '', focus.consultComplaint ? 'V' : '',
     focus.acceptComplaint ? 'V' : '', focus.other ? 'V' : '', focus.otherNote || '',
     target.user ? 'V' : '', target.caregiver ? 'V' : '',
-    hb.trackingAdaptation || '', hb.goalAchievement || '', hb.planAppropriateness || '', hb.otherHandling || '',
-    new Date(),
+    record.managerIdNumber || '',
+    '', '',
+    hb.trackingAdaptation || '', hb.goalAchievement || '', hb.planAppropriateness || '', hb.otherHandling || '無',
+    record.caseName || '',
   ]);
 }
 
