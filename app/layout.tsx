@@ -3,7 +3,7 @@ import './globals.css'
 import Sidebar from '@/components/Sidebar'
 
 export const metadata: Metadata = {
-  title: '個案管理系統',
+  title: '測試的個案管理系統',
   description: '個案管理師工作系統',
 }
 

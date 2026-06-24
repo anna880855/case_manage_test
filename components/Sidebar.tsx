@@ -47,7 +47,7 @@ export default function Sidebar() {
   return (
     <aside className="w-56 bg-[#50665b] text-white flex flex-col h-full flex-shrink-0">
       <div className="p-5 border-b border-white/10">
-        <h1 className="text-base font-bold leading-tight">個案管理系統</h1>
+        <h1 className="text-base font-bold leading-tight">測試的個案管理系統</h1>
         <p className="text-xs text-[#aec4b6] mt-1">
           {activeCases > 0 ? `在案 ${activeCases} 位` : '尚無個案'}
         </p>
