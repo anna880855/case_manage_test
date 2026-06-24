@@ -31,7 +31,7 @@ export default function HealthBureauExportPage() {
       .then(res => res.json())
       .then(data => {
         if (data.synced) setRemoteRows(data.rows || [])
-        else setRemoteError('無法從雲端電訪分頁取得資料，目前只會顯示本機紀錄。')
+        else setRemoteError(`無法從雲端電訪分頁取得資料，目前只會顯示本機紀錄。${data.error ? `（${data.error}）` : ''}`)
       })
       .catch(() => setRemoteError('無法從雲端電訪分頁取得資料，目前只會顯示本機紀錄。'))
       .finally(() => setLoadingRemote(false))
