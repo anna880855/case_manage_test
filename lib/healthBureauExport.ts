@@ -40,6 +40,30 @@ function toRocDate(raw: string): string {
 
 const v = (b: boolean) => (b ? 'V' : '')
 
+const GOAL_MARKERS = ['短期目標：', '中期目標：', '長期目標：']
+const PLAN_MARKER = '一、照顧及專業服務：'
+
+/**
+ * 電訪內容是「三、訪談內容 → 目標追蹤 → 服務計劃內容追蹤」依序寫成的長文字，
+ * 這裡依固定段落標記拆出三段，分別對應衛生局報表的三個文字欄位。
+ */
+function splitContent(content: string): { narrative: string; goalBlock: string; planBlock: string } {
+  const afterHeader = content.split('三、訪談內容：')[1] ?? content
+  const planIdx = afterHeader.indexOf(PLAN_MARKER)
+  const beforePlan = planIdx !== -1 ? afterHeader.slice(0, planIdx) : afterHeader
+  const planBlock = planIdx !== -1 ? afterHeader.slice(planIdx).trim() : ''
+
+  let goalIdx = -1
+  for (const marker of GOAL_MARKERS) {
+    const idx = beforePlan.indexOf(marker)
+    if (idx !== -1 && (goalIdx === -1 || idx < goalIdx)) goalIdx = idx
+  }
+  const narrative = (goalIdx !== -1 ? beforePlan.slice(0, goalIdx) : beforePlan).trim()
+  const goalBlock = goalIdx !== -1 ? beforePlan.slice(goalIdx).trim() : ''
+
+  return { narrative, goalBlock, planBlock }
+}
+
 export function buildHealthBureauRows(
   visits: PhoneVisitRecord[],
   cases: Case[],
@@ -48,6 +72,7 @@ export function buildHealthBureauRows(
   return visits.map(visit => {
     const c = cases.find(x => x.id === visit.caseId)
     const hb = visit.healthBureau || EMPTY_HEALTH_BUREAU_FIELDS
+    const { narrative, goalBlock, planBlock } = splitContent(visit.content || '')
     return [
       c?.idNumber || '',
       toRocDate(visit.date),
@@ -70,10 +95,10 @@ export function buildHealthBureauRows(
       managerIdNumber,
       v(hb.remindSupervisor),
       toRocDate(hb.nextCheckDate),
-      hb.trackingAdaptation,
-      hb.goalAchievement,
-      hb.planAppropriateness,
-      hb.otherHandling,
+      hb.trackingAdaptation || narrative,
+      hb.goalAchievement || goalBlock,
+      hb.planAppropriateness || planBlock,
+      hb.otherHandling || '無',
     ]
   })
 }

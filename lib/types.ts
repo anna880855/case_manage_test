@@ -64,7 +64,7 @@ export const EMPTY_HEALTH_BUREAU_FIELDS: HealthBureauFields = {
   trackingAdaptation: '',
   goalAchievement: '',
   planAppropriateness: '',
-  otherHandling: '',
+  otherHandling: '無',
 }
 
 export interface PhoneVisitRecord {
