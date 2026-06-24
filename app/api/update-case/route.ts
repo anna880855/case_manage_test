@@ -23,6 +23,9 @@ export async function POST(req: NextRequest) {
     } else if (action === 'deleteCase') {
       const { caseName, caseNumber } = body
       params = { action: 'deleteCase', caseName, caseNumber: caseNumber || '' }
+    } else if (action === 'appendVisit') {
+      const { sheetName, record } = body
+      params = { action: 'appendVisit', sheetName, record: JSON.stringify(record) }
     } else {
       return NextResponse.json({ ok: false, error: 'unknown action' }, { status: 400 })
     }

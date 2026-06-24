@@ -337,6 +337,29 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
         if (!caseData.synced) {
           setError(`已儲存在本機，但雲端同步失敗${caseData.error ? '：' + caseData.error : ''}。換電腦前請確認此筆紀錄已同步。`)
         }
+        const visitRes = await fetch('/api/update-case', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            appsScriptUrl: settings.appsScriptUrl,
+            action: 'appendVisit',
+            sheetName: settings.phoneVisitSheetName,
+            record: {
+              kind: 'phone',
+              caseName: selectedCase.name,
+              caseNumber: selectedCase.caseNumber,
+              idNumber: selectedCase.idNumber,
+              date: `${date} ${time}`,
+              target: target || selectedCase.guardian || selectedCase.name,
+              content: generated,
+              healthBureau: hb,
+            },
+          }),
+        })
+        const visitData = await visitRes.json()
+        if (!visitData.synced) {
+          setError(`已儲存在本機，但電訪分頁同步失敗${visitData.error ? '：' + visitData.error : ''}。換電腦前請確認此筆紀錄已同步。`)
+        }
       } catch {
         setError('已儲存在本機，但雲端同步失敗（網路錯誤）。換電腦前請確認此筆紀錄已同步。')
       }

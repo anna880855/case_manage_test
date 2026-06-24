@@ -118,6 +118,11 @@ function doGet(e) {
       const caseNumber = e.parameter.caseNumber || '';
       deleteCaseRow(caseName, caseNumber);
       result = { deleted: true };
+    } else if (action === 'appendVisit') {
+      const sheetName = e.parameter.sheetName || '';
+      const record = JSON.parse(e.parameter.record || '{}');
+      appendVisitRow(sheetName, record);
+      result = { appended: true };
     } else if (action === 'getDrafts') {
       const caseNumber = e.parameter.caseNumber || '';
       result = { drafts: getDrafts(caseNumber) };
@@ -253,6 +258,60 @@ function deleteCaseRow(caseName, caseNumber) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
   sheet.deleteRow(rowIndex);
+}
+
+// ====================================================
+// 電訪／家訪紀錄（每一筆寫入獨立工作表，依設定頁的分頁名稱建立）
+// ====================================================
+
+const PHONE_VISIT_HEADERS = [
+  '個案姓名', '個案編號', '身分證字號', '電訪日期', '電訪對象', '電訪內容',
+  '服務項目-調整照顧計畫', '服務項目-接受長照需要者及其家屬有關長照服務諮詢、申訴與處理',
+  '服務項目-照會或連結至服務提供單位', '服務項目-其他', '服務項目-其他說明',
+  '服務重點-追蹤長照需要者與各項服務之連結情形', '服務重點-計畫與內容異動討論',
+  '服務重點-協助長照需要者或其家屬其他資源連結', '服務重點-接受長照需要者及其家屬有關長照服務諮詢、申訴與處理',
+  '服務重點-接受申訴', '服務重點-其他', '服務重點-其他備註',
+  '服務對象-服務使用者', '服務對象-家庭照顧者', '其他處理事項', '建立時間',
+];
+
+const HOME_VISIT_HEADERS = ['個案姓名', '個案編號', '身分證字號', '家訪日期', '家訪計劃內容', '建立時間'];
+
+function getOrCreateVisitSheet(sheetName, headers) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    sheet.appendRow(headers);
+  }
+  return sheet;
+}
+
+function appendVisitRow(sheetName, record) {
+  if (record.kind === 'home') {
+    const sheet = getOrCreateVisitSheet(sheetName, HOME_VISIT_HEADERS);
+    sheet.appendRow([
+      record.caseName || '', record.caseNumber || '', record.idNumber || '',
+      record.date || '', record.planContent || '', new Date(),
+    ]);
+    return;
+  }
+
+  const hb = record.healthBureau || {};
+  const items = hb.serviceItems || {};
+  const focus = hb.serviceFocus || {};
+  const target = hb.serviceTarget || {};
+  const sheet = getOrCreateVisitSheet(sheetName, PHONE_VISIT_HEADERS);
+  sheet.appendRow([
+    record.caseName || '', record.caseNumber || '', record.idNumber || '',
+    record.date || '', record.target || '', record.content || '',
+    items.adjustPlan ? 'V' : '', items.consultComplaint ? 'V' : '',
+    items.referral ? 'V' : '', items.other ? 'V' : '', items.otherNote || '',
+    focus.trackLinkage ? 'V' : '', focus.planDiscussion ? 'V' : '',
+    focus.resourceLink ? 'V' : '', focus.consultComplaint ? 'V' : '',
+    focus.acceptComplaint ? 'V' : '', focus.other ? 'V' : '', focus.otherNote || '',
+    target.user ? 'V' : '', target.caregiver ? 'V' : '',
+    hb.otherHandling || '', new Date(),
+  ]);
 }
 
 // ====================================================
