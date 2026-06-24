@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     const json = await res.json()
     if (!json.ok) throw new Error(json.error || 'Apps Script 回傳錯誤')
 
-    return NextResponse.json({ ok: true, synced: true, rows: json.rows })
+    return NextResponse.json({ ok: true, synced: true, rows: json.data?.rows })
   } catch (err) {
     const msg = err instanceof Error ? err.message : '同步失敗'
     return NextResponse.json({ ok: true, synced: false, error: msg })
