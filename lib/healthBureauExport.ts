@@ -102,15 +102,36 @@ export function buildHealthBureauRows(
   })
 }
 
+export function exportHealthBureauRowsXls(rows: string[][], fileName: string) {
+  const sheet = XLSX.utils.aoa_to_sheet([HEADER, ...rows])
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, sheet, '工作表1')
+  XLSX.writeFile(workbook, fileName)
+}
+
 export function exportHealthBureauXls(
   visits: PhoneVisitRecord[],
   cases: Case[],
   managerIdNumber: string,
   fileName: string
 ) {
-  const rows = buildHealthBureauRows(visits, cases, managerIdNumber)
-  const sheet = XLSX.utils.aoa_to_sheet([HEADER, ...rows])
-  const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, sheet, '工作表1')
-  XLSX.writeFile(workbook, fileName)
+  exportHealthBureauRowsXls(buildHealthBureauRows(visits, cases, managerIdNumber), fileName)
+}
+
+// 雲端電訪分頁的 7 碼民國日期轉成 YYYY-MM，用來比對選擇的月份
+export function rocDateToYearMonth(rocDate: string): string {
+  if (!rocDate || rocDate.length < 5) return ''
+  const roc = parseInt(rocDate.slice(0, rocDate.length - 4), 10)
+  const mm = rocDate.slice(-4, -2)
+  if (isNaN(roc)) return ''
+  return `${roc + 1911}-${mm}`
+}
+
+// 把每筆雲端列（25 欄衛生局格式 + 個案姓名）裁成 25 欄，並排除本機已有的紀錄（依身分證字號＋日期判斷）
+export function mergeRemoteRows(localRows: string[][], remoteRows: string[][]): string[][] {
+  const localKeys = new Set(localRows.map(r => `${r[0]}|${r[1]}`))
+  const remoteOnly = remoteRows
+    .map(r => r.slice(0, 25))
+    .filter(r => !localKeys.has(`${r[0]}|${r[1]}`))
+  return [...localRows, ...remoteOnly].sort((a, b) => a[1].localeCompare(b[1]))
 }

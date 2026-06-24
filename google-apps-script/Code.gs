@@ -123,6 +123,9 @@ function doGet(e) {
       const record = JSON.parse(e.parameter.record || '{}');
       appendVisitRow(sheetName, record);
       result = { appended: true };
+    } else if (action === 'getPhoneVisits') {
+      const sheetName = e.parameter.sheetName || '';
+      result = { rows: getPhoneVisitRows(sheetName) };
     } else if (action === 'getDrafts') {
       const caseNumber = e.parameter.caseNumber || '';
       result = { drafts: getDrafts(caseNumber) };
@@ -347,6 +350,18 @@ function appendVisitRow(sheetName, record) {
     hb.trackingAdaptation || '', hb.goalAchievement || '', hb.planAppropriateness || '', hb.otherHandling || '無',
     record.caseName || '',
   ]);
+}
+
+// 讀回電訪紀錄分頁（已是衛生局報表 25 欄格式 + 個案姓名），供換電腦時重建報表用
+function getPhoneVisitRows(sheetName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return [];
+  return data.slice(1).map(function(row) {
+    return row.map(function(cell) { return cell instanceof Date ? '' : String(cell || ''); });
+  });
 }
 
 // ====================================================
