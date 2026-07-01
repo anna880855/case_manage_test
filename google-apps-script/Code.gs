@@ -177,7 +177,11 @@ function getCases() {
       headers.forEach(function(h, i) {
         const field = FIELD_MAP[h];
         if (!field) return;
-        const val = String(r.row[i] !== null && r.row[i] !== undefined ? r.row[i] : '').trim();
+        const raw = r.row[i] !== null && r.row[i] !== undefined ? r.row[i] : '';
+        const DATE_FIELDS = ['birthDate', 'disabilityExpiry', 'lastHomeVisitDate', 'lastPhoneVisitDate'];
+        const val = (raw instanceof Date && DATE_FIELDS.indexOf(field) >= 0)
+          ? raw.toISOString().slice(0, 10)
+          : String(raw).trim();
         if (field === 'status') {
           obj.status = STATUS_MAP[val] || 'active';
         } else if (field === 'services') {
