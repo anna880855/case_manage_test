@@ -259,14 +259,16 @@ function HomeVisitContent() {
   const [goalSynced, setGoalSynced] = useState(false)
   // ── Care Plan
   const [serviceEnabled, setServiceEnabled] = useState(false)
-  const [services, setServices] = useState<{ id: string; category: string; code: string; name: string; units: string }[]>([])
+  const [services, setServices] = useState<{ id: string; category: string; code: string; name: string; units: string; expectedTime?: string }[]>([])
   const [showServiceDropdown, setShowServiceDropdown] = useState(false)
   const [customServiceName, setCustomServiceName] = useState('')
   const [customServiceCat, setCustomServiceCat] = useState<ServiceCategory>('BA')
   const [transportation, setTransportation] = useState('1840元/月')
   const [transportHospital, setTransportHospital] = useState('')
+  const [transportExpectedTime, setTransportExpectedTime] = useState('')
   const [transportEnabled, setTransportEnabled] = useState(false)
   const [aidsDetail, setAidsDetail] = useState('暫無需求')
+  const [aidsExpectedTime, setAidsExpectedTime] = useState('')
   const [respiteEnabled, setRespiteEnabled] = useState(false)
   const [respiteStartYear, setRespiteStartYear] = useState('')
   const [respiteStartMonth, setRespiteStartMonth] = useState('')
@@ -275,10 +277,12 @@ function HomeVisitContent() {
   const [respiteAsOfMonth, setRespiteAsOfMonth] = useState('')
   const [respiteRemaining, setRespiteRemaining] = useState('')
   const [respiteItems, setRespiteItems] = useState<{ id: string; prefix: string; code: string; name: string; units: string }[]>([])
+  const [respiteExpectedTime, setRespiteExpectedTime] = useState('')
   const [referral, setReferral] = useState('暫無')
 
   // ── Generated / saved
   const [finalDoc, setFinalDoc] = useState('')
+  const [serviceScheduleDoc, setServiceScheduleDoc] = useState('')
   const [saved, setSaved] = useState(false)
   const [syncWarning, setSyncWarning] = useState('')
   const [error, setError] = useState('')
@@ -327,10 +331,11 @@ function HomeVisitContent() {
     caseOther, caseGenerated, caregiverInput, caregiverGenerated,
     selectedProblems, rankedProblems, problemExplanations,
     careGoals, services,
-    transportation, transportHospital, transportEnabled, aidsDetail,
+    transportation, transportHospital, transportExpectedTime, transportEnabled,
+    aidsDetail, aidsExpectedTime,
     respiteEnabled, respiteStartYear, respiteStartMonth, respiteEndYear, respiteEndMonth,
-    respiteAsOfMonth, respiteRemaining, respiteItems,
-    serviceEnabled, referral, finalDoc,
+    respiteAsOfMonth, respiteRemaining, respiteItems, respiteExpectedTime,
+    serviceEnabled, referral, finalDoc, serviceScheduleDoc,
   })
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -390,8 +395,10 @@ function HomeVisitContent() {
     if (d.services) setServices(d.services)
     if (d.transportation !== undefined) setTransportation(d.transportation)
     if (d.transportHospital !== undefined) setTransportHospital(d.transportHospital)
+    if (d.transportExpectedTime !== undefined) setTransportExpectedTime(d.transportExpectedTime)
     if (d.transportEnabled !== undefined) setTransportEnabled(d.transportEnabled)
     if (d.aidsDetail !== undefined) setAidsDetail(d.aidsDetail)
+    if (d.aidsExpectedTime !== undefined) setAidsExpectedTime(d.aidsExpectedTime)
     if (d.respiteEnabled !== undefined) setRespiteEnabled(d.respiteEnabled)
     if (d.respiteStartYear !== undefined) setRespiteStartYear(d.respiteStartYear)
     if (d.respiteStartMonth !== undefined) setRespiteStartMonth(d.respiteStartMonth)
@@ -400,9 +407,11 @@ function HomeVisitContent() {
     if (d.respiteAsOfMonth !== undefined) setRespiteAsOfMonth(d.respiteAsOfMonth)
     if (d.respiteRemaining !== undefined) setRespiteRemaining(d.respiteRemaining)
     if (d.respiteItems) setRespiteItems(d.respiteItems.map((i: { id: string; prefix?: string; code: string; name: string; units: string }) => ({ ...i, prefix: i.prefix || 'GA' })))
+    if (d.respiteExpectedTime !== undefined) setRespiteExpectedTime(d.respiteExpectedTime)
     if (d.serviceEnabled !== undefined) setServiceEnabled(d.serviceEnabled)
     if (d.referral !== undefined) setReferral(d.referral)
     if (d.finalDoc !== undefined) setFinalDoc(d.finalDoc)
+    if (d.serviceScheduleDoc !== undefined) setServiceScheduleDoc(d.serviceScheduleDoc)
   }
 
   // Pre-populate services from case's last saved home visit services
@@ -676,6 +685,9 @@ ${problemSection}
 
   const handleSave = async () => {
     if (!selectedCase || !finalDoc) return
+    const respiteDetailText = respiteEnabled
+      ? `自${respiteStartYear}年${respiteStartMonth}月至${respiteEndYear}年${respiteEndMonth}月，截至${respiteAsOfMonth}月尚餘${respiteRemaining}元`
+      : ''
     addHomeVisit({
       id: Date.now().toString(),
       caseId: selectedCase.id,
@@ -683,6 +695,26 @@ ${problemSection}
       date,
       planContent: finalDoc,
       createdAt: new Date().toISOString(),
+      visitTarget,
+      diseaseHistory: diseaseGenerated,
+      caseSummary: caseGenerated,
+      caregiverInfo: caregiverGenerated || caregiverInput,
+      problemList: rankedProblems,
+      problemExplanations,
+      serviceGoals: careGoals,
+      serviceDetail: {
+        services,
+        transportEnabled,
+        transportation,
+        transportHospital,
+        transportExpectedTime,
+        aidsDetail,
+        aidsExpectedTime,
+        respiteEnabled,
+        respiteDetail: respiteDetailText,
+        respiteExpectedTime,
+        referral,
+      },
     })
     const caseUpdate: Parameters<typeof updateCase>[1] = { lastHomeVisitDate: date, lastHomeVisitContent: finalDoc }
     if (careGoals.short || careGoals.mid || careGoals.long) {
@@ -691,7 +723,7 @@ ${problemSection}
       caseUpdate.longGoal = careGoals.long
     }
     if (services.length > 0) {
-      caseUpdate.caseHomeServices = services
+      caseUpdate.caseHomeServices = services.map(s => ({ ...s }))
     }
     // 依本次家訪實際填寫內容，推算個案使用的長照服務大項目（居家照顧／日間照顧／交通車服務／喘息服務）
     const derivedServices = new Set(selectedCase.services || [])
@@ -765,6 +797,47 @@ ${problemSection}
     setTimeout(() => setGoalSynced(false), 3000)
   }
 
+  // ── Service schedule doc
+  const handleGenServiceSchedule = () => {
+    if (!selectedCase) return
+    const birthDate = selectedCase.birthDate
+    const age = birthDate
+      ? Math.floor((Date.now() - new Date(birthDate).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+      : ''
+    const gender = selectedCase.gender || '男/女'
+    const cmsLevel = selectedCase.careLevel || ''
+
+    const careServices = services.filter(s => ['BA', 'BB', 'BC', 'BD'].includes(s.category))
+    const serviceItemsText = careServices.map(s => `${s.code}[${s.name}] ${s.units}單位/月`).join('；') || '（未填）'
+    const serviceTimesText = careServices
+      .filter(s => s.expectedTime)
+      .map(s => `${s.name}：${s.expectedTime}`)
+      .join('；') || ''
+
+    const transportText = transportEnabled
+      ? `${transportation}，至${transportHospital || '醫療院所'}${transportExpectedTime ? `（${transportExpectedTime}）` : ''}`
+      : '暫無需求'
+
+    const aidsText = aidsDetail !== '暫無需求' && aidsExpectedTime
+      ? `${aidsDetail}（${aidsExpectedTime}）`
+      : aidsDetail
+
+    const bodyStatus = caseGenerated || diseaseGenerated || '（請先產生個案摘述）'
+
+    const doc = `一、公告時間：
+二、個案: ${selectedCase.name}，${age}歲，CMS ${cmsLevel}  一般，${gender}
+三、地址：${selectedCase.address || '新北市三重區'}
+四、個案身心狀況：${bodyStatus}
+
+五、服務項目: ${serviceItemsText}
+六、服務時間: ${serviceTimesText || '（請填寫各服務期待時間）'}
+七、備註: 交通接送：${transportText}；輔具：${aidsText}
+八、個管:${settings.managerName || '林侑萱'}，本次輪派單位0000，請輪派單位於 XX:00前回覆
+九、可承接夥伴可於記事本中留言`
+
+    setServiceScheduleDoc(doc)
+  }
+
   // ── Service helpers
   const addServiceFromCatalog = (cat: typeof SERVICE_CATALOG[number]) => {
     setServices(prev => [...prev, { id: Date.now().toString(), category: cat.category, code: cat.code, name: cat.name, units: '' }])
@@ -780,6 +853,9 @@ ${problemSection}
 
   const updateServiceUnits = (id: string, units: string) =>
     setServices(prev => prev.map(s => s.id === id ? { ...s, units } : s))
+
+  const updateServiceExpectedTime = (id: string, expectedTime: string) =>
+    setServices(prev => prev.map(s => s.id === id ? { ...s, expectedTime } : s))
 
   const removeService = (id: string) =>
     setServices(prev => prev.filter(s => s.id !== id))
@@ -1528,24 +1604,36 @@ ${problemSection}
                   {serviceEnabled && <>
                   <div className="space-y-2 mb-3">
                     {services.map(s => (
-                      <div key={s.id} className="flex items-center gap-2 p-2 border border-gray-100 rounded-lg bg-gray-50">
-                        <CatBadge cat={s.category} />
-                        <span className="text-xs text-gray-400 font-mono flex-shrink-0">{s.code}</span>
-                        <span className="flex-1 text-sm text-gray-700">{s.name}</span>
-                        <input
-                          type="text"
-                          value={s.units}
-                          onChange={e => updateServiceUnits(s.id, e.target.value)}
-                          placeholder="單位/月"
-                          className="w-24 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#a3bcaa]"
-                        />
-                        <span className="text-xs text-gray-400">單位/月</span>
-                        <button
-                          onClick={() => removeService(s.id)}
-                          className="text-red-400 hover:text-red-600 text-sm"
-                        >
-                          ×
-                        </button>
+                      <div key={s.id} className="p-2 border border-gray-100 rounded-lg bg-gray-50 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <CatBadge cat={s.category} />
+                          <span className="text-xs text-gray-400 font-mono flex-shrink-0">{s.code}</span>
+                          <span className="flex-1 text-sm text-gray-700">{s.name}</span>
+                          <input
+                            type="text"
+                            value={s.units}
+                            onChange={e => updateServiceUnits(s.id, e.target.value)}
+                            placeholder="單位/月"
+                            className="w-20 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#a3bcaa]"
+                          />
+                          <span className="text-xs text-gray-400 flex-shrink-0">單位/月</span>
+                          <button
+                            onClick={() => removeService(s.id)}
+                            className="text-red-400 hover:text-red-600 text-sm flex-shrink-0"
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-2 ml-1">
+                          <span className="text-xs text-gray-400 flex-shrink-0">期待服務時間</span>
+                          <input
+                            type="text"
+                            value={s.expectedTime || ''}
+                            onChange={e => updateServiceExpectedTime(s.id, e.target.value)}
+                            placeholder="例：週一、三 09:00-11:00"
+                            className="flex-1 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#a3bcaa]"
+                          />
+                        </div>
                       </div>
                     ))}
                     {services.length === 0 && (
@@ -1645,6 +1733,13 @@ ${problemSection}
                         placeholder="目的地醫院/機構"
                         className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
                       />
+                      <input
+                        type="text"
+                        value={transportExpectedTime}
+                        onChange={e => setTransportExpectedTime(e.target.value)}
+                        placeholder="期待服務時間（例：週二 09:00）"
+                        className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
+                      />
                     </div>
                   )}
                 </div>
@@ -1656,6 +1751,13 @@ ${problemSection}
                     type="text"
                     value={aidsDetail}
                     onChange={e => setAidsDetail(e.target.value)}
+                    className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa] mb-2"
+                  />
+                  <input
+                    type="text"
+                    value={aidsExpectedTime}
+                    onChange={e => setAidsExpectedTime(e.target.value)}
+                    placeholder="期待服務時間（選填）"
                     className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
                   />
                 </div>
@@ -1722,6 +1824,16 @@ ${problemSection}
                           + 新增項目
                         </button>
                       </div>
+                      <div>
+                        <SectionLabel>期待服務時間</SectionLabel>
+                        <input
+                          type="text"
+                          value={respiteExpectedTime}
+                          onChange={e => setRespiteExpectedTime(e.target.value)}
+                          placeholder="例：週末 08:00-17:00"
+                          className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1771,6 +1883,40 @@ ${problemSection}
 
                 <div className="flex justify-end mb-4">
                   <GenButton onClick={handleGenFinal} loading={genFinal} label="📄 產生完整家訪記錄" />
+                </div>
+
+                {/* Service schedule doc */}
+                <div className="mt-6 border-t border-gray-100 pt-5">
+                  <h4 className="font-semibold text-gray-700 mb-3">服務時間問案文字檔</h4>
+                  <p className="text-xs text-gray-400 mb-3">依照顧計畫中的服務項目及期待時間，產生標準問案格式</p>
+                  <div className="flex justify-end mb-3">
+                    <button
+                      onClick={handleGenServiceSchedule}
+                      disabled={!selectedCase}
+                      className="flex items-center gap-2 px-4 py-2 bg-[#50665b] text-white rounded-lg text-sm font-semibold hover:bg-[#3d4f46] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      📋 產生服務問案文字
+                    </button>
+                  </div>
+                  {serviceScheduleDoc && (
+                    <div className="border border-gray-200 rounded-xl overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-100">
+                        <span className="text-sm font-semibold text-gray-600">服務問案文字</span>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(serviceScheduleDoc)}
+                          className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-white text-gray-600"
+                        >
+                          複製
+                        </button>
+                      </div>
+                      <textarea
+                        value={serviceScheduleDoc}
+                        onChange={e => setServiceScheduleDoc(e.target.value)}
+                        rows={12}
+                        className="w-full p-4 text-sm text-gray-700 font-sans leading-relaxed bg-white resize-y focus:outline-none"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {finalDoc && (
