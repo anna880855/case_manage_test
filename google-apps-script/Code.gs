@@ -336,8 +336,9 @@ function appendVisitRow(sheetName, record) {
     // 防重：個案編號 + 家訪日期 相同則跳過
     const data = sheet.getDataRange().getValues();
     for (var i = 1; i < data.length; i++) {
+      var sheetDate = data[i][3] instanceof Date ? data[i][3].toISOString().slice(0, 10) : String(data[i][3] || '').trim();
       if (String(data[i][1] || '').trim() === String(record.caseNumber || '').trim() &&
-          String(data[i][3] || '').trim() === String(record.date || '').trim()) {
+          sheetDate === String(record.date || '').trim()) {
         return; // 已存在，不重複寫入
       }
     }
@@ -393,7 +394,7 @@ function getHomeVisitRows(sheetName) {
       id: String(row[1] || '') + '|' + String(row[3] || ''),
       caseId: String(row[1] || ''),
       caseName: String(row[0] || ''),
-      date: String(row[3] || ''),
+      date: row[3] instanceof Date ? row[3].toISOString().slice(0, 10) : String(row[3] || ''),
       visitTarget: String(row[4] || ''),
       diseaseHistory: String(row[5] || ''),
       caseSummary: String(row[6] || ''),

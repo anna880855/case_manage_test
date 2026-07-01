@@ -147,7 +147,11 @@ export const useStore = create<StoreState & StoreActions>()(
         set((state) => ({ phoneVisits: state.phoneVisits.filter((v) => v.id !== id) })),
 
       addHomeVisit: (visit) =>
-        set((state) => ({ homeVisits: [visit, ...state.homeVisits] })),
+        set((state) => {
+          const key = `${visit.caseId}|${visit.date}`
+          if (state.homeVisits.some((v) => `${v.caseId}|${v.date}` === key)) return state
+          return { homeVisits: [visit, ...state.homeVisits] }
+        }),
 
       deleteHomeVisit: (id) =>
         set((state) => ({ homeVisits: state.homeVisits.filter((v) => v.id !== id) })),
