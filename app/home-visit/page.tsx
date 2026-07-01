@@ -811,6 +811,17 @@ ${problemSection}
     const gender = selectedCase.gender || '男/女'
     const cmsLevel = selectedCase.careLevel || ''
 
+    const anonName = (name: string) => {
+      if (name.length <= 1) return name
+      if (name.length === 2) return name[0] + '○'
+      return name[0] + name.slice(1, -1).replace(/./g, '○') + name[name.length - 1]
+    }
+    const anonAddress = (addr: string) => addr.replace(/\d+(?=號)/g, '○○○')
+
+    const now = new Date()
+    const rocYear = now.getFullYear() - 1911
+    const announceDate = `民國${rocYear}年${now.getMonth() + 1}月${now.getDate()}日`
+
     const careServices = services.filter(s => ['BA', 'BB', 'BC', 'BD'].includes(s.category))
     const serviceItemsText = careServices.map(s => `${s.code}[${s.name}] ${s.units}單位/月`).join('；') || '（未填）'
     const serviceTimesText = careServices
@@ -823,12 +834,11 @@ ${problemSection}
       : '暫無需求'
 
     const aidsText = aidsDetail
-
     const bodyStatus = caseGenerated || diseaseGenerated || '（請先產生個案摘述）'
 
-    const doc = `一、公告時間：
-二、個案: ${selectedCase.name}，${age}歲，CMS ${cmsLevel}  一般，${gender}
-三、地址：${selectedCase.address || '新北市三重區'}
+    const doc = `一、公告時間：${announceDate}
+二、個案: ${anonName(selectedCase.name)}，${age}歲，CMS ${cmsLevel}  一般，${gender}
+三、地址：${anonAddress(selectedCase.address || '新北市三重區')}
 四、個案身心狀況：${bodyStatus}
 
 五、服務項目: ${serviceItemsText}

@@ -522,12 +522,23 @@ function ServiceArrangementSection({ c }: { c: Case }) {
     const gender = c.gender || '男/女'
     const cmsLevel = c.careLevel || ''
 
+    const anonName = (name: string) => {
+      if (name.length <= 1) return name
+      if (name.length === 2) return name[0] + '○'
+      return name[0] + name.slice(1, -1).replace(/./g, '○') + name[name.length - 1]
+    }
+    const anonAddress = (addr: string) => addr.replace(/\d+(?=號)/g, '○○○')
+
+    const now = new Date()
+    const rocYear = now.getFullYear() - 1911
+    const announceDate = `民國${rocYear}年${now.getMonth() + 1}月${now.getDate()}日`
+
     const serviceItemsText = services.map(s => `${s.code}[${s.name}] ${s.units}單位/月`).join('；') || '（未填）'
     const serviceTimesText = services.filter(s => s.expectedTime).map(s => `${s.name}：${s.expectedTime}`).join('；') || '（請填寫期待時間）'
 
-    const doc = `一、公告時間：
-二、個案: ${c.name}，${age}歲，CMS ${cmsLevel}  一般，${gender}
-三、地址：${c.address || ''}
+    const doc = `一、公告時間：${announceDate}
+二、個案: ${anonName(c.name)}，${age}歲，CMS ${cmsLevel}  一般，${gender}
+三、地址：${anonAddress(c.address || '')}
 四、個案身心狀況：${physicalStatus || '（請填寫個案身心狀況）'}
 
 五、服務項目: ${serviceItemsText}
