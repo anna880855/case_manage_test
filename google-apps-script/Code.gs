@@ -62,6 +62,10 @@ const FIELD_MAP = {
   '短期目標': 'shortGoal', '短期照顧目標': 'shortGoal',
   '中期目標': 'midGoal', '中期照顧目標': 'midGoal',
   '長期目標': 'longGoal', '長期照顧目標': 'longGoal',
+  // 身體狀況
+  '身體狀況': 'physicalStatus', '身心狀況': 'physicalStatus', '個案身心狀況': 'physicalStatus',
+  // 服務安排
+  '服務安排': 'caseHomeServices', '四大包服務': 'caseHomeServices', '照顧服務安排': 'caseHomeServices',
   // 備註
   '備註': 'notes', '備註1': 'notes', '注意事項': 'notes', '備注': 'notes',
   '說明': 'notes', '特殊狀況': 'notes', '其他': 'notes',
@@ -178,6 +182,8 @@ function getCases() {
           obj.status = STATUS_MAP[val] || 'active';
         } else if (field === 'services') {
           obj.services = val ? val.split(/[,、，；;]/).map(function(s) { return s.trim(); }).filter(Boolean) : [];
+        } else if (field === 'caseHomeServices') {
+          try { obj.caseHomeServices = val ? JSON.parse(val) : []; } catch(e) { obj.caseHomeServices = []; }
         } else {
           obj[field] = val;
         }
@@ -228,6 +234,7 @@ function fieldsToRow(headers, fields) {
     if (!field) return '';
     if (field === 'status') return STATUS_REVERSE[fields.status] || fields.status || '在案';
     if (field === 'services') return (fields.services || []).join('、');
+    if (field === 'caseHomeServices') return fields.caseHomeServices ? JSON.stringify(fields.caseHomeServices) : '';
     return fields[field] !== undefined && fields[field] !== null ? fields[field] : '';
   });
 }
