@@ -20,6 +20,7 @@ export interface Case {
   lastHomeVisitContent?: string
   lastPhoneVisitDate?: string
   lastPhoneVisitContent?: string
+  physicalStatus?: string
   shortGoal?: string
   midGoal?: string
   longGoal?: string
