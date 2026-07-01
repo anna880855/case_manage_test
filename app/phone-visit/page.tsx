@@ -217,7 +217,7 @@ function PhoneVisitContent() {
     setPlanBlock(prevVisits.length > 0 ? parsePlanBlock(prevVisits[0].content) : { ...PLAN_DEFAULTS })
     setGoalTracking(prevVisits.length > 0 ? parseGoalBlock(prevVisits[0].content) : { ...EMPTY_GOAL_TRACKING })
     setHb({ ...EMPTY_HEALTH_BUREAU_FIELDS })
-    setCustomNote(c?.physicalStatus || '')
+    setCustomNote('')
     autoSelect(c)
   }
 
