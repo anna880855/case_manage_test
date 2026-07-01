@@ -180,7 +180,7 @@ function getCases() {
         const raw = r.row[i] !== null && r.row[i] !== undefined ? r.row[i] : '';
         const DATE_FIELDS = ['birthDate', 'disabilityExpiry', 'lastHomeVisitDate', 'lastPhoneVisitDate'];
         const val = (raw instanceof Date && DATE_FIELDS.indexOf(field) >= 0)
-          ? raw.toISOString().slice(0, 10)
+          ? toLocalDateStr(raw)
           : String(raw).trim();
         if (field === 'status') {
           obj.status = STATUS_MAP[val] || 'active';
@@ -331,6 +331,14 @@ function getOrCreateVisitSheet(sheetName, headers) {
   return sheet;
 }
 
+function toLocalDateStr(d) {
+  if (!(d instanceof Date)) return String(d || '').trim();
+  var year = d.getFullYear();
+  var month = ('0' + (d.getMonth() + 1)).slice(-2);
+  var day = ('0' + d.getDate()).slice(-2);
+  return year + '-' + month + '-' + day;
+}
+
 function toRocDate(raw) {
   if (!raw) return '';
   const d = new Date(raw);
@@ -347,7 +355,7 @@ function appendVisitRow(sheetName, record) {
     // 防重：個案編號 + 家訪日期 相同則跳過
     const data = sheet.getDataRange().getValues();
     for (var i = 1; i < data.length; i++) {
-      var sheetDate = data[i][3] instanceof Date ? data[i][3].toISOString().slice(0, 10) : String(data[i][3] || '').trim();
+      var sheetDate = toLocalDateStr(data[i][3]);
       if (String(data[i][1] || '').trim() === String(record.caseNumber || '').trim() &&
           sheetDate === String(record.date || '').trim()) {
         return; // 已存在，不重複寫入
@@ -405,7 +413,7 @@ function getHomeVisitRows(sheetName) {
       id: String(row[1] || '') + '|' + String(row[3] || ''),
       caseId: String(row[1] || ''),
       caseName: String(row[0] || ''),
-      date: row[3] instanceof Date ? row[3].toISOString().slice(0, 10) : String(row[3] || ''),
+      date: toLocalDateStr(row[3]),
       visitTarget: String(row[4] || ''),
       diseaseHistory: String(row[5] || ''),
       caseSummary: String(row[6] || ''),
