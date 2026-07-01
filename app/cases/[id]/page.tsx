@@ -481,9 +481,12 @@ function ServiceArrangementSection({ c }: { c: Case }) {
   const [editingStatus, setEditingStatus] = useState(false)
 
   useEffect(() => {
+    if (!editingStatus) setPhysicalStatus(c.physicalStatus || '')
+  }, [c.physicalStatus]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     setServices(c.caseHomeServices || [])
-    setPhysicalStatus(c.physicalStatus || '')
-  }, [c.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [c.caseHomeServices]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const isDirty = JSON.stringify(services) !== JSON.stringify(c.caseHomeServices || []) ||
     physicalStatus !== (c.physicalStatus || '')

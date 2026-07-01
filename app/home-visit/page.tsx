@@ -725,6 +725,10 @@ ${problemSection}
     if (services.length > 0) {
       caseUpdate.caseHomeServices = services.map(s => ({ ...s }))
     }
+    // 家訪後自動更新個案身心狀況，供問案文字使用
+    if (caseGenerated) {
+      caseUpdate.physicalStatus = caseGenerated
+    }
     // 依本次家訪實際填寫內容，推算個案使用的長照服務大項目（居家照顧／日間照顧／交通車服務／喘息服務）
     const derivedServices = new Set(selectedCase.services || [])
     if (services.some(s => s.category === 'BA')) derivedServices.add('居家照顧')
