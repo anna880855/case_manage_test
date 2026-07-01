@@ -217,6 +217,7 @@ function PhoneVisitContent() {
     setPlanBlock(prevVisits.length > 0 ? parsePlanBlock(prevVisits[0].content) : { ...PLAN_DEFAULTS })
     setGoalTracking(prevVisits.length > 0 ? parseGoalBlock(prevVisits[0].content) : { ...EMPTY_GOAL_TRACKING })
     setHb({ ...EMPTY_HEALTH_BUREAU_FIELDS })
+    setCustomNote(c?.physicalStatus || '')
     autoSelect(c)
   }
 
@@ -610,10 +611,23 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
 
           {/* 補充說明 */}
           <div className="bg-white rounded-xl border border-gray-100 p-4">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              個案其他狀況補充
-              <span className="font-normal text-gray-400 ml-1">（選填，AI 會一併融入電訪紀錄）</span>
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-semibold text-gray-700">
+                個案其他狀況補充
+                <span className="font-normal text-gray-400 ml-1">（選填，AI 會一併融入電訪紀錄）</span>
+              </label>
+              {selectedCase && customNote && customNote !== (selectedCase.physicalStatus || '') && (
+                <button
+                  onClick={() => {
+                    updateCase(selectedCase.id, { physicalStatus: customNote })
+                  }}
+                  className="text-xs px-2.5 py-1 border border-[#a3bcaa] text-[#7a9985] rounded-lg hover:bg-[#e6ede7] transition-colors flex-shrink-0"
+                  title="將此內容更新至個案資料，下次電訪可自動帶入"
+                >
+                  ↑ 更新至個案資料
+                </button>
+              )}
+            </div>
             <textarea
               value={customNote}
               onChange={e => setCustomNote(e.target.value)}
