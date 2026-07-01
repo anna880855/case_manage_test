@@ -217,6 +217,7 @@ function PhoneVisitContent() {
     setPlanBlock(prevVisits.length > 0 ? parsePlanBlock(prevVisits[0].content) : { ...PLAN_DEFAULTS })
     setGoalTracking(prevVisits.length > 0 ? parseGoalBlock(prevVisits[0].content) : { ...EMPTY_GOAL_TRACKING })
     setHb({ ...EMPTY_HEALTH_BUREAU_FIELDS })
+    setCustomNote('')
     autoSelect(c)
   }
 
@@ -750,10 +751,21 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
                 ['otherHandling', '其他處理事項'],
               ] as const).map(([key, label]) => (
                 <div key={key}>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    {label}
-                    {key !== 'otherHandling' && <span className="text-gray-400">（由電訪內容自動帶入，可手動修改）</span>}
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs text-gray-500">
+                      {label}
+                      {key !== 'otherHandling' && <span className="text-gray-400">（由電訪內容自動帶入，可手動修改）</span>}
+                    </label>
+                    {key === 'planAppropriateness' && selectedCase && hb.planAppropriateness && hb.planAppropriateness !== (selectedCase.physicalStatus || '') && (
+                      <button
+                        onClick={() => updateCase(selectedCase.id, { physicalStatus: hb.planAppropriateness })}
+                        className="text-xs px-2.5 py-1 border border-[#a3bcaa] text-[#7a9985] rounded-lg hover:bg-[#e6ede7] transition-colors flex-shrink-0 ml-2"
+                        title="將此內容更新至個案資料，下次電訪及問案文字可自動帶入"
+                      >
+                        ↑ 更新至個案資料
+                      </button>
+                    )}
+                  </div>
                   <textarea
                     value={hb[key]}
                     onChange={e => setHb(p => ({ ...p, [key]: e.target.value }))}

@@ -29,6 +29,9 @@ export async function POST(req: NextRequest) {
     } else if (action === 'getPhoneVisits') {
       const { sheetName } = body
       params = { action: 'getPhoneVisits', sheetName }
+    } else if (action === 'getHomeVisits') {
+      const { sheetName } = body
+      params = { action: 'getHomeVisits', sheetName }
     } else {
       return NextResponse.json({ ok: false, error: 'unknown action' }, { status: 400 })
     }
@@ -44,7 +47,7 @@ export async function POST(req: NextRequest) {
     const json = await res.json()
     if (!json.ok) throw new Error(json.error || 'Apps Script 回傳錯誤')
 
-    return NextResponse.json({ ok: true, synced: true, rows: json.data?.rows })
+    return NextResponse.json({ ok: true, synced: true, rows: json.data?.rows, visits: json.data?.visits })
   } catch (err) {
     const msg = err instanceof Error ? err.message : '同步失敗'
     return NextResponse.json({ ok: true, synced: false, error: msg })

@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
 import type { Case } from '@/lib/types'
+import { SERVICE_CATALOG, type ServiceCategory } from '@/app/home-visit/constants'
 
 const STATUS_OPTIONS: { value: Case['status']; label: string; color: string }[] = [
   { value: 'active', label: '在案', color: 'bg-green-100 text-green-700 border-green-200' },
@@ -402,6 +403,8 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
         </Link>
       </div>
 
+      <ServiceArrangementSection c={c} />
+
       <div className="grid grid-cols-2 gap-4 mb-6">
         <VisitHistory
           title="電訪紀錄"
@@ -460,6 +463,283 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function ServiceArrangementSection({ c }: { c: Case }) {
+  const { updateCase, settings } = useStore()
+  type Service = { id: string; category: string; code: string; name: string; units: string; expectedTime?: string }
+  const [services, setServices] = useState<Service[]>(c.caseHomeServices || [])
+  const [physicalStatus, setPhysicalStatus] = useState(c.physicalStatus || '')
+  const [showDropdown, setShowDropdown] = useState(false)
+  const [customName, setCustomName] = useState('')
+  const [customCat, setCustomCat] = useState<ServiceCategory>('BA')
+  const [serviceDoc, setServiceDoc] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [editingStatus, setEditingStatus] = useState(false)
+
+  useEffect(() => {
+    if (!editingStatus) setPhysicalStatus(c.physicalStatus || '')
+  }, [c.physicalStatus]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    setServices(c.caseHomeServices || [])
+  }, [c.caseHomeServices]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const isDirty = JSON.stringify(services) !== JSON.stringify(c.caseHomeServices || []) ||
+    physicalStatus !== (c.physicalStatus || '')
+
+  const handleSave = async () => {
+    setSaving(true)
+    const fields: Partial<Case> = { caseHomeServices: services, physicalStatus }
+    updateCase(c.id, fields)
+    if (settings.appsScriptUrl) {
+      try {
+        await fetch('/api/update-case', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            appsScriptUrl: settings.appsScriptUrl,
+            action: 'updateCase',
+            caseName: c.name,
+            caseNumber: c.caseNumber,
+            fields,
+          }),
+        })
+      } catch {}
+    }
+    setSaving(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 3000)
+  }
+
+  const handleGenDoc = () => {
+    const age = c.birthDate
+      ? Math.floor((Date.now() - new Date(c.birthDate).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+      : ''
+    const gender = c.gender || '男/女'
+    const cmsLevel = c.careLevel || ''
+
+    const anonName = (name: string) => {
+      if (name.length <= 1) return name
+      if (name.length === 2) return name[0] + '○'
+      return name[0] + name.slice(1, -1).replace(/./g, '○') + name[name.length - 1]
+    }
+    const anonAddress = (addr: string) => addr.replace(/\d+(?=號)/g, '○○○')
+
+    const now = new Date()
+    const rocYear = now.getFullYear() - 1911
+    const announceDate = `民國${rocYear}年${now.getMonth() + 1}月${now.getDate()}日`
+
+    const serviceItemsText = services.map(s => `${s.code}[${s.name}] ${s.units}單位/月`).join('；') || '（未填）'
+    const serviceTimesText = services.filter(s => s.expectedTime).map(s => `${s.name}：${s.expectedTime}`).join('；') || '（請填寫期待時間）'
+
+    const doc = `一、公告時間：${announceDate}
+二、個案: ${anonName(c.name)}，${age}歲，CMS ${cmsLevel}  一般，${gender}
+三、地址：${anonAddress(c.address || '')}
+四、個案身心狀況：${physicalStatus || '（請填寫個案身心狀況）'}
+
+五、服務項目: ${serviceItemsText}
+六、服務時間: ${serviceTimesText}
+七、備註:
+八、個管:${settings.managerName || '林侑萱'}，本次輪派單位0000，請輪派單位於 XX:00前回覆
+九、可承接夥伴可於記事本中留言`
+    setServiceDoc(doc)
+  }
+
+  const addFromCatalog = (cat: typeof SERVICE_CATALOG[number]) => {
+    setServices(prev => [...prev, { id: Date.now().toString(), category: cat.category, code: cat.code, name: cat.name, units: '', expectedTime: '' }])
+    setShowDropdown(false)
+  }
+
+  const addCustom = () => {
+    if (!customName.trim()) return
+    setServices(prev => [...prev, { id: Date.now().toString(), category: customCat, code: customCat, name: customName.trim(), units: '', expectedTime: '' }])
+    setCustomName('')
+    setShowDropdown(false)
+  }
+
+  const catColors: Record<string, string> = {
+    BA: 'bg-blue-100 text-blue-700', BB: 'bg-purple-100 text-purple-700',
+    BC: 'bg-amber-100 text-amber-700', BD: 'bg-pink-100 text-pink-700',
+    CA: 'bg-teal-100 text-teal-700',
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 p-5 mb-5">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-semibold text-gray-700">服務安排</h3>
+        <div className="flex gap-2 items-center">
+          {isDirty && (
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="px-3 py-1.5 text-xs bg-[#7a9985] text-white rounded-lg hover:bg-[#50665b] disabled:opacity-50"
+            >
+              {saving ? '儲存中...' : '儲存變更'}
+            </button>
+          )}
+          {saved && !isDirty && <span className="text-xs text-green-600">✓ 已儲存</span>}
+          <button
+            onClick={handleGenDoc}
+            disabled={services.length === 0}
+            className="px-3 py-1.5 text-xs bg-[#50665b] text-white rounded-lg hover:bg-[#3d4f46] disabled:opacity-40 transition-colors"
+          >
+            📋 產生問案文字
+          </button>
+        </div>
+      </div>
+
+      {/* Physical status */}
+      <div className="mb-4">
+        <div className="flex items-center gap-2 mb-1">
+          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">個案身心狀況</label>
+          <button
+            onClick={() => setEditingStatus(e => !e)}
+            className="text-xs text-[#a3bcaa] hover:text-[#7a9985]"
+          >
+            {editingStatus ? '完成' : '編輯'}
+          </button>
+        </div>
+        {editingStatus ? (
+          <textarea
+            value={physicalStatus}
+            onChange={e => setPhysicalStatus(e.target.value)}
+            rows={3}
+            placeholder="填寫個案身心狀況摘要，用於問案文字第四項…"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa] resize-none"
+          />
+        ) : (
+          <p className={`text-sm px-3 py-2 rounded-lg ${physicalStatus ? 'text-gray-700 bg-gray-50' : 'text-gray-400 italic bg-gray-50'}`}>
+            {physicalStatus || '（尚未填寫）'}
+          </p>
+        )}
+      </div>
+
+      {/* Service list */}
+      <div className="mb-3">
+        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">照顧及專業服務</label>
+        <div className="space-y-2 mb-3">
+          {services.map(s => (
+            <div key={s.id} className="border border-gray-100 rounded-lg p-2.5 bg-gray-50 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${catColors[s.category] || 'bg-gray-100 text-gray-600'}`}>
+                  {s.category}
+                </span>
+                <span className="text-xs text-gray-400 font-mono flex-shrink-0">{s.code}</span>
+                <span className="flex-1 text-sm text-gray-700">{s.name}</span>
+                <input
+                  type="text"
+                  value={s.units}
+                  onChange={e => setServices(prev => prev.map(x => x.id === s.id ? { ...x, units: e.target.value } : x))}
+                  placeholder="單位/月"
+                  className="w-20 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#a3bcaa]"
+                />
+                <span className="text-xs text-gray-400 flex-shrink-0">單位/月</span>
+                <button
+                  onClick={() => setServices(prev => prev.filter(x => x.id !== s.id))}
+                  className="text-red-400 hover:text-red-600 text-sm flex-shrink-0"
+                >×</button>
+              </div>
+              <div className="flex items-center gap-2 ml-1">
+                <span className="text-xs text-gray-400 flex-shrink-0">期待服務時間</span>
+                <input
+                  type="text"
+                  value={s.expectedTime || ''}
+                  onChange={e => setServices(prev => prev.map(x => x.id === s.id ? { ...x, expectedTime: e.target.value } : x))}
+                  placeholder="例：週一、三 09:00-11:00"
+                  className="flex-1 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#a3bcaa]"
+                />
+              </div>
+            </div>
+          ))}
+          {services.length === 0 && (
+            <p className="text-xs text-gray-400 italic py-2">尚未設定服務項目</p>
+          )}
+        </div>
+
+        <div className="relative">
+          <button
+            onClick={() => setShowDropdown(d => !d)}
+            className="px-3 py-1.5 border border-[#a3bcaa] text-[#7a9985] rounded-lg text-sm hover:bg-[#e6ede7] transition-colors"
+          >
+            + 新增服務
+          </button>
+          {showDropdown && (
+            <div className="absolute z-20 top-full left-0 mt-1 w-80 bg-white border border-gray-200 rounded-xl shadow-lg p-3">
+              <p className="text-xs font-semibold text-gray-500 mb-2">從清單選擇</p>
+              <div className="space-y-1 mb-3 max-h-56 overflow-y-auto">
+                {(['BA', 'BB', 'BC', 'BD', 'CA', 'CB', 'CC', 'CD'] as const).map(grp => {
+                  const items = SERVICE_CATALOG.filter(s => s.category === grp)
+                  if (!items.length) return null
+                  return (
+                    <div key={grp}>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase px-1 py-0.5">{grp}</p>
+                      {items.map((cat, i) => (
+                        <button
+                          key={i}
+                          onClick={() => addFromCatalog(cat)}
+                          className="w-full flex items-center gap-1.5 px-2 py-1 text-xs text-gray-700 hover:bg-[#e6ede7] rounded-lg text-left"
+                        >
+                          <span className="font-mono text-gray-400 w-14 flex-shrink-0">{cat.code}</span>
+                          {cat.name}
+                        </button>
+                      ))}
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="text-xs font-semibold text-gray-500 mb-1.5 border-t border-gray-100 pt-2">自訂服務</p>
+              <div className="flex gap-2 items-center">
+                <select
+                  value={customCat}
+                  onChange={e => setCustomCat(e.target.value as ServiceCategory)}
+                  className="px-1.5 py-1 border border-gray-200 rounded text-xs focus:outline-none"
+                >
+                  {(['BA', 'BB', 'BC', 'BD', 'CA', 'CB', 'CC', 'CD'] as const).map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  value={customName}
+                  onChange={e => setCustomName(e.target.value)}
+                  placeholder="服務名稱"
+                  onKeyDown={e => e.key === 'Enter' && addCustom()}
+                  className="flex-1 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#a3bcaa]"
+                />
+                <button
+                  onClick={addCustom}
+                  className="px-2 py-1 bg-[#7a9985] text-white rounded text-xs hover:bg-[#50665b]"
+                >加入</button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Generated doc */}
+      {serviceDoc && (
+        <div className="mt-4 border border-gray-200 rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-100">
+            <span className="text-sm font-semibold text-gray-600">服務問案文字</span>
+            <button
+              onClick={() => navigator.clipboard.writeText(serviceDoc)}
+              className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-white text-gray-600"
+            >
+              複製
+            </button>
+          </div>
+          <textarea
+            value={serviceDoc}
+            onChange={e => setServiceDoc(e.target.value)}
+            rows={12}
+            className="w-full p-4 text-sm text-gray-700 font-sans leading-relaxed bg-white resize-y focus:outline-none"
+          />
+        </div>
+      )}
     </div>
   )
 }

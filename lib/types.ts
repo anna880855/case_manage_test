@@ -15,11 +15,12 @@ export interface Case {
   guardianPhone: string
   notes: string
   services: string[]
-  caseHomeServices?: { id: string; category: string; code: string; name: string; units: string }[]
+  caseHomeServices?: { id: string; category: string; code: string; name: string; units: string; expectedTime?: string }[]
   lastHomeVisitDate?: string
   lastHomeVisitContent?: string
   lastPhoneVisitDate?: string
   lastPhoneVisitContent?: string
+  physicalStatus?: string
   shortGoal?: string
   midGoal?: string
   longGoal?: string
@@ -81,6 +82,27 @@ export interface HomeVisitRecord {
   date: string
   planContent: string
   createdAt: string
+  // Structured fields
+  visitTarget?: string
+  diseaseHistory?: string
+  caseSummary?: string
+  caregiverInfo?: string
+  problemList?: string[]
+  problemExplanations?: string
+  serviceGoals?: { short: string; mid: string; long: string }
+  serviceDetail?: {
+    services: { id: string; category: string; code: string; name: string; units: string; expectedTime?: string }[]
+    transportEnabled: boolean
+    transportation: string
+    transportHospital: string
+    transportExpectedTime: string
+    aidsDetail: string
+    aidsExpectedTime: string
+    respiteEnabled: boolean
+    respiteDetail: string
+    respiteExpectedTime: string
+    referral: string
+  }
 }
 
 export interface Sentence {

@@ -14,7 +14,7 @@ const NAV = [
 
 export default function Sidebar() {
   const pathname = usePathname()
-  const { cases, settings, setCases, setSentences } = useStore()
+  const { cases, settings, setCases, setSentences, importHomeVisits } = useStore()
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState('')
 
@@ -29,12 +29,14 @@ export default function Sidebar() {
     setSyncing(true)
     if (!silent) setSyncMsg('')
     try {
-      const res = await fetch(`/api/sync?url=${encodeURIComponent(settings.appsScriptUrl)}`)
+      const params = new URLSearchParams({ url: settings.appsScriptUrl, homeVisitSheetName: settings.homeVisitSheetName || '家訪紀錄' })
+      const res = await fetch(`/api/sync?${params}`)
       const data = await res.json()
       if (data.error) throw new Error(data.error)
       if (data.cases) setCases(data.cases)
       if (data.sentences) setSentences(data.sentences)
-      setSyncMsg(`已同步 ${data.cases?.length || 0} 筆個案`)
+      if (data.homeVisits?.length) importHomeVisits(data.homeVisits)
+      setSyncMsg(`已同步 ${data.cases?.length || 0} 筆個案、${data.homeVisits?.length || 0} 筆家訪`)
     } catch (e: unknown) {
       if (!silent) setSyncMsg(e instanceof Error ? e.message : '同步失敗')
     } finally {
