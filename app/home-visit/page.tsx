@@ -815,12 +815,10 @@ ${problemSection}
       .join('；') || ''
 
     const transportText = transportEnabled
-      ? `${transportation}，至${transportHospital || '醫療院所'}${transportExpectedTime ? `（${transportExpectedTime}）` : ''}`
+      ? `${transportation}，至${transportHospital || '醫療院所'}`
       : '暫無需求'
 
-    const aidsText = aidsDetail !== '暫無需求' && aidsExpectedTime
-      ? `${aidsDetail}（${aidsExpectedTime}）`
-      : aidsDetail
+    const aidsText = aidsDetail
 
     const bodyStatus = caseGenerated || diseaseGenerated || '（請先產生個案摘述）'
 
@@ -1733,13 +1731,6 @@ ${problemSection}
                         placeholder="目的地醫院/機構"
                         className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
                       />
-                      <input
-                        type="text"
-                        value={transportExpectedTime}
-                        onChange={e => setTransportExpectedTime(e.target.value)}
-                        placeholder="期待服務時間（例：週二 09:00）"
-                        className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
-                      />
                     </div>
                   )}
                 </div>
@@ -1751,13 +1742,6 @@ ${problemSection}
                     type="text"
                     value={aidsDetail}
                     onChange={e => setAidsDetail(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa] mb-2"
-                  />
-                  <input
-                    type="text"
-                    value={aidsExpectedTime}
-                    onChange={e => setAidsExpectedTime(e.target.value)}
-                    placeholder="期待服務時間（選填）"
                     className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
                   />
                 </div>
@@ -1823,16 +1807,6 @@ ${problemSection}
                         >
                           + 新增項目
                         </button>
-                      </div>
-                      <div>
-                        <SectionLabel>期待服務時間</SectionLabel>
-                        <input
-                          type="text"
-                          value={respiteExpectedTime}
-                          onChange={e => setRespiteExpectedTime(e.target.value)}
-                          placeholder="例：週末 08:00-17:00"
-                          className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
-                        />
                       </div>
                     </div>
                   )}
