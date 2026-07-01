@@ -333,6 +333,14 @@ function toRocDate(raw) {
 function appendVisitRow(sheetName, record) {
   if (record.kind === 'home') {
     const sheet = getOrCreateVisitSheet(sheetName, HOME_VISIT_HEADERS);
+    // 防重：個案編號 + 家訪日期 相同則跳過
+    const data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][1] || '').trim() === String(record.caseNumber || '').trim() &&
+          String(data[i][3] || '').trim() === String(record.date || '').trim()) {
+        return; // 已存在，不重複寫入
+      }
+    }
     const sd = record.serviceDetail || {};
     const goals = record.serviceGoals || {};
     sheet.appendRow([
