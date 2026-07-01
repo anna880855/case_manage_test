@@ -352,12 +352,17 @@ function toRocDate(raw) {
 function appendVisitRow(sheetName, record) {
   if (record.kind === 'home') {
     const sheet = getOrCreateVisitSheet(sheetName, HOME_VISIT_HEADERS);
-    // 防重：個案編號 + 家訪日期 相同則跳過
+    // 防重：(個案編號 或 個案姓名) + 家訪日期 相同則跳過
     const data = sheet.getDataRange().getValues();
+    const recNum = String(record.caseNumber || '').trim();
+    const recName = String(record.caseName || '').trim();
+    const recDate = String(record.date || '').trim();
     for (var i = 1; i < data.length; i++) {
+      var sheetNum = String(data[i][1] || '').trim();
+      var sheetName = String(data[i][0] || '').trim();
       var sheetDate = toLocalDateStr(data[i][3]);
-      if (String(data[i][1] || '').trim() === String(record.caseNumber || '').trim() &&
-          sheetDate === String(record.date || '').trim()) {
+      var caseMatch = recNum ? (sheetNum === recNum) : (sheetName === recName);
+      if (caseMatch && sheetDate === recDate) {
         return; // 已存在，不重複寫入
       }
     }
