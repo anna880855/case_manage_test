@@ -126,6 +126,9 @@ function doGet(e) {
     } else if (action === 'getPhoneVisits') {
       const sheetName = e.parameter.sheetName || '';
       result = { rows: getPhoneVisitRows(sheetName) };
+    } else if (action === 'getHomeVisits') {
+      const sheetName = e.parameter.sheetName || '';
+      result = { visits: getHomeVisitRows(sheetName) };
     } else if (action === 'getDrafts') {
       const caseNumber = e.parameter.caseNumber || '';
       result = { drafts: getDrafts(caseNumber) };
@@ -298,7 +301,14 @@ const PHONE_VISIT_HEADERS = [
   '個案姓名',
 ];
 
-const HOME_VISIT_HEADERS = ['個案姓名', '個案編號', '身分證字號', '家訪日期', '家訪計劃內容', '建立時間'];
+const HOME_VISIT_HEADERS = [
+  '個案姓名', '個案編號', '身分證字號', '家訪日期',
+  '家訪對象', '個案病史', '個案摘述', '主要照顧者資訊',
+  '問題清單', '問題說明',
+  '短期目標', '中期目標', '長期目標',
+  '照顧及專業服務JSON', '交通接送', '就醫機構', '輔具', '喘息服務', '轉介說明',
+  '家訪計劃內容', '建立時間',
+];
 
 function getOrCreateVisitSheet(sheetName, headers) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -323,9 +333,16 @@ function toRocDate(raw) {
 function appendVisitRow(sheetName, record) {
   if (record.kind === 'home') {
     const sheet = getOrCreateVisitSheet(sheetName, HOME_VISIT_HEADERS);
+    const sd = record.serviceDetail || {};
+    const goals = record.serviceGoals || {};
     sheet.appendRow([
-      record.caseName || '', record.caseNumber || '', record.idNumber || '',
-      record.date || '', record.planContent || '', new Date(),
+      record.caseName || '', record.caseNumber || '', record.idNumber || '', record.date || '',
+      record.visitTarget || '', record.diseaseHistory || '', record.caseSummary || '', record.caregiverInfo || '',
+      JSON.stringify(record.problemList || []), record.problemExplanations || '',
+      goals.short || '', goals.mid || '', goals.long || '',
+      JSON.stringify(sd.services || []), sd.transportation || '', sd.transportHospital || '',
+      sd.aidsDetail || '', sd.respiteDetail || '', sd.referral || '',
+      record.planContent || '', new Date(),
     ]);
     return;
   }
@@ -350,6 +367,49 @@ function appendVisitRow(sheetName, record) {
     hb.trackingAdaptation || '', hb.goalAchievement || '', hb.planAppropriateness || '', hb.otherHandling || '無',
     record.caseName || '',
   ]);
+}
+
+// 讀回家訪紀錄，重建為 HomeVisitRecord 物件陣列
+function getHomeVisitRows(sheetName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return [];
+  return data.slice(1).map(function(row) {
+    var problemList = [];
+    try { problemList = JSON.parse(String(row[8] || '[]')); } catch(e) {}
+    var services = [];
+    try { services = JSON.parse(String(row[13] || '[]')); } catch(e) {}
+    return {
+      id: String(row[1] || '') + '|' + String(row[3] || ''),
+      caseId: String(row[1] || ''),
+      caseName: String(row[0] || ''),
+      date: String(row[3] || ''),
+      visitTarget: String(row[4] || ''),
+      diseaseHistory: String(row[5] || ''),
+      caseSummary: String(row[6] || ''),
+      caregiverInfo: String(row[7] || ''),
+      problemList: problemList,
+      problemExplanations: String(row[9] || ''),
+      serviceGoals: { short: String(row[10] || ''), mid: String(row[11] || ''), long: String(row[12] || '') },
+      serviceDetail: {
+        services: services,
+        transportEnabled: !!String(row[14] || ''),
+        transportation: String(row[14] || ''),
+        transportHospital: String(row[15] || ''),
+        transportExpectedTime: '',
+        aidsDetail: String(row[16] || ''),
+        aidsExpectedTime: '',
+        respiteEnabled: !!String(row[17] || ''),
+        respiteDetail: String(row[17] || ''),
+        respiteExpectedTime: '',
+        referral: String(row[18] || ''),
+      },
+      planContent: String(row[19] || ''),
+      createdAt: row[20] instanceof Date ? row[20].toISOString() : String(row[20] || ''),
+    };
+  });
 }
 
 // 讀回電訪紀錄分頁（已是衛生局報表 25 欄格式 + 個案姓名），供換電腦時重建報表用

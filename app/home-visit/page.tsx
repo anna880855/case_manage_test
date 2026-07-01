@@ -766,7 +766,52 @@ ${problemSection}
     setSaved(true)
     setSyncWarning('')
     if (settings.appsScriptUrl) {
-      if (caseUpdateWarning) setSyncWarning(caseUpdateWarning)
+      let visitSyncWarning = ''
+      try {
+        const visitRecord = {
+          kind: 'home',
+          caseName: selectedCase.name,
+          caseNumber: selectedCase.caseNumber,
+          idNumber: selectedCase.idNumber || '',
+          date,
+          visitTarget,
+          diseaseHistory: diseaseGenerated,
+          caseSummary: caseGenerated,
+          caregiverInfo: caregiverGenerated || caregiverInput,
+          problemList: rankedProblems,
+          problemExplanations,
+          serviceGoals: careGoals,
+          serviceDetail: {
+            services,
+            transportEnabled,
+            transportation,
+            transportHospital,
+            aidsDetail,
+            respiteEnabled,
+            respiteDetail: respiteDetailText,
+            referral,
+          },
+          planContent: finalDoc,
+        }
+        const visitRes = await fetch('/api/update-case', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            appsScriptUrl: settings.appsScriptUrl,
+            action: 'appendVisit',
+            sheetName: settings.homeVisitSheetName || '家訪紀錄',
+            record: visitRecord,
+          }),
+        })
+        const visitData = await visitRes.json()
+        if (!visitData.synced) {
+          visitSyncWarning = `家訪紀錄雲端同步失敗${visitData.error ? '：' + visitData.error : ''}。`
+        }
+      } catch {
+        visitSyncWarning = '家訪紀錄雲端同步失敗（網路錯誤）。'
+      }
+      const warnings = [caseUpdateWarning, visitSyncWarning].filter(Boolean).join(' ')
+      if (warnings) setSyncWarning(warnings)
     } else {
       setSyncWarning('尚未設定 Apps Script URL，此筆紀錄只存在本機瀏覽器，換電腦將無法看到。請至「系統設定」設定後重新儲存。')
     }
