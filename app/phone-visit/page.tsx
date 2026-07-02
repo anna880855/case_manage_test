@@ -207,24 +207,40 @@ function PhoneVisitContent() {
 
   const handleSelectCase = (id: string) => {
     const c = cases.find(x => x.id === id)
-    const prevVisits = getPhoneVisitsByCase(id)
-    const prevTarget = prevVisits.length > 0 ? prevVisits[0].target : ''
     setSelectedCaseId(id)
     setCaseSearch('')
     setGenerated('')
     setSaved(false)
-    setTarget(prevTarget || c?.guardian || '')
-    setPlanBlock(prevVisits.length > 0 ? parsePlanBlock(prevVisits[0].content) : { ...PLAN_DEFAULTS })
-    setGoalTracking(prevVisits.length > 0 ? parseGoalBlock(prevVisits[0].content) : { ...EMPTY_GOAL_TRACKING })
     setHb({ ...EMPTY_HEALTH_BUREAU_FIELDS })
     setCustomNote('')
     autoSelect(c)
   }
 
+  // Pre-fill target / plan tracking / goal tracking from the case's last phone visit.
+  // Runs both when a case is picked from the list and when the page is opened directly
+  // via /phone-visit?caseId=... (e.g. from a case's detail page), which previously
+  // skipped this pre-fill entirely.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!mounted || !selectedCaseId) return
+    const c = cases.find(x => x.id === selectedCaseId)
+    const prevVisits = getPhoneVisitsByCase(selectedCaseId)
+    const prevTarget = prevVisits.length > 0 ? prevVisits[0].target : ''
+    setTarget(prevTarget || c?.guardian || '')
+    setPlanBlock(prevVisits.length > 0 ? parsePlanBlock(prevVisits[0].content) : { ...PLAN_DEFAULTS })
+    setGoalTracking(prevVisits.length > 0 ? parseGoalBlock(prevVisits[0].content) : { ...EMPTY_GOAL_TRACKING })
+  }, [mounted, selectedCaseId])
+
   const applyPrevPlanBlock = () => {
     if (!selectedCaseId) return
     const prevVisits = getPhoneVisitsByCase(selectedCaseId)
     if (prevVisits.length > 0) setPlanBlock(parsePlanBlock(prevVisits[0].content))
+  }
+
+  const applyPrevGoalBlock = () => {
+    if (!selectedCaseId) return
+    const prevVisits = getPhoneVisitsByCase(selectedCaseId)
+    if (prevVisits.length > 0) setGoalTracking(parseGoalBlock(prevVisits[0].content))
   }
 
   const pickedSentences = CATEGORIES
@@ -538,7 +554,16 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
           {/* 目標追蹤 */}
           {selectedCase && (selectedCase.shortGoal || selectedCase.midGoal || selectedCase.longGoal) && (
             <div className="bg-white rounded-xl border border-gray-100 p-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">目標追蹤進度</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-700">目標追蹤進度</h3>
+                <button
+                  onClick={applyPrevGoalBlock}
+                  disabled={!selectedCaseId || getPhoneVisitsByCase(selectedCaseId).length === 0}
+                  className="text-xs text-gray-400 hover:text-[#7a9985] border border-gray-200 hover:border-[#a3bcaa] rounded px-2 py-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  套用上次內容
+                </button>
+              </div>
               <div className="space-y-3">
                 {(['short', 'mid', 'long'] as GoalKey[]).map(key => {
                   const goalText = key === 'short' ? selectedCase.shortGoal : key === 'mid' ? selectedCase.midGoal : selectedCase.longGoal
