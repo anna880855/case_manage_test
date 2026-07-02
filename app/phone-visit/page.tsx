@@ -117,6 +117,15 @@ function parseGoalBlock(content: string): Record<GoalKey, { status: string; perc
   return result
 }
 
+// The case's own lastPhoneVisitContent/lastPhoneVisitDate (synced to its row on the main
+// case sheet on every save via the 'updateCase' action) already holds the exact raw
+// generated content of the most recent visit — no reconstruction needed, unlike the
+// separate phone-visit tab which only stores the split-out 衛生局 report fields.
+function targetFromContent(content: string): string {
+  const m = content.match(/二、電訪對象：([^\n]*)/)
+  return m ? m[1].trim() : ''
+}
+
 function PhoneVisitContent() {
   const searchParams = useSearchParams()
   const { cases, sentences, settings, addPhoneVisit, getPhoneVisitsByCase, updateCase } = useStore()
@@ -177,6 +186,18 @@ function PhoneVisitContent() {
     autoSelect()
   }, [mounted, sentences])
 
+  // Cloud copy of the case list (each row carries lastPhoneVisitDate/lastPhoneVisitContent,
+  // updated by every device on save), used so plan/goal tracking can be carried forward
+  // even when the last visit was saved on another device.
+  const [remoteCases, setRemoteCases] = useState<Partial<Case>[]>([])
+  useEffect(() => {
+    if (!mounted || !settings.appsScriptUrl) return
+    fetch(`/api/sync?url=${encodeURIComponent(settings.appsScriptUrl)}`)
+      .then(res => res.json())
+      .then(data => { if (!data.error) setRemoteCases(data.cases || []) })
+      .catch(() => {})
+  }, [mounted, settings.appsScriptUrl])
+
   const selectedCase = cases.find(c => c.id === selectedCaseId)
   const recentVisits = selectedCaseId ? getPhoneVisitsByCase(selectedCaseId).slice(0, 2) : []
 
@@ -207,25 +228,60 @@ function PhoneVisitContent() {
 
   const handleSelectCase = (id: string) => {
     const c = cases.find(x => x.id === id)
-    const prevVisits = getPhoneVisitsByCase(id)
-    const prevTarget = prevVisits.length > 0 ? prevVisits[0].target : ''
     setSelectedCaseId(id)
     setCaseSearch('')
     setGenerated('')
     setSaved(false)
-    setTarget(prevTarget || c?.guardian || '')
-    setPlanBlock(prevVisits.length > 0 ? parsePlanBlock(prevVisits[0].content) : { ...PLAN_DEFAULTS })
-    setGoalTracking(prevVisits.length > 0 ? parseGoalBlock(prevVisits[0].content) : { ...EMPTY_GOAL_TRACKING })
     setHb({ ...EMPTY_HEALTH_BUREAU_FIELDS })
     setCustomNote('')
     autoSelect(c)
   }
 
+  // Find the most recent visit for a case, comparing the locally-saved record against
+  // the cloud sheet (written by every device on save) and using whichever is newer, so
+  // "套用上次內容" works even when the last visit was saved on a different device.
+  const getLatestVisitSource = (caseId: string): { content?: string; target?: string; hasPrev: boolean } => {
+    const c = cases.find(x => x.id === caseId)
+    const prevVisits = getPhoneVisitsByCase(caseId)
+    const localLatest = prevVisits[0]
+    const idNumber = c?.idNumber?.trim()
+    const remoteCase = idNumber ? remoteCases.find(r => (r.idNumber || '').trim() === idNumber) : undefined
+    const remoteContent = remoteCase?.lastPhoneVisitContent
+    const remoteDate = remoteCase?.lastPhoneVisitDate || ''
+    const localDate = localLatest?.date || ''
+    if (remoteContent && remoteDate > localDate) {
+      return { content: remoteContent, target: targetFromContent(remoteContent), hasPrev: true }
+    }
+    return { content: localLatest?.content, target: localLatest?.target, hasPrev: !!localLatest || !!remoteContent }
+  }
+
+  // Pre-fill target / plan tracking / goal tracking from the case's last phone visit.
+  // Runs both when a case is picked from the list and when the page is opened directly
+  // via /phone-visit?caseId=... (e.g. from a case's detail page), which previously
+  // skipped this pre-fill entirely.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!mounted || !selectedCaseId) return
+    const c = cases.find(x => x.id === selectedCaseId)
+    const { content, target: prevTarget } = getLatestVisitSource(selectedCaseId)
+    setTarget(prevTarget || c?.guardian || '')
+    setPlanBlock(content ? parsePlanBlock(content) : { ...PLAN_DEFAULTS })
+    setGoalTracking(content ? parseGoalBlock(content) : { ...EMPTY_GOAL_TRACKING })
+  }, [mounted, selectedCaseId, remoteCases])
+
   const applyPrevPlanBlock = () => {
     if (!selectedCaseId) return
-    const prevVisits = getPhoneVisitsByCase(selectedCaseId)
-    if (prevVisits.length > 0) setPlanBlock(parsePlanBlock(prevVisits[0].content))
+    const { content } = getLatestVisitSource(selectedCaseId)
+    if (content) setPlanBlock(parsePlanBlock(content))
   }
+
+  const applyPrevGoalBlock = () => {
+    if (!selectedCaseId) return
+    const { content } = getLatestVisitSource(selectedCaseId)
+    if (content) setGoalTracking(parseGoalBlock(content))
+  }
+
+  const hasPrevVisit = (caseId: string) => getLatestVisitSource(caseId).hasPrev
 
   const pickedSentences = CATEGORIES
     .filter(cat => picked[cat])
@@ -538,7 +594,16 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
           {/* 目標追蹤 */}
           {selectedCase && (selectedCase.shortGoal || selectedCase.midGoal || selectedCase.longGoal) && (
             <div className="bg-white rounded-xl border border-gray-100 p-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">目標追蹤進度</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-700">目標追蹤進度</h3>
+                <button
+                  onClick={applyPrevGoalBlock}
+                  disabled={!selectedCaseId || !hasPrevVisit(selectedCaseId)}
+                  className="text-xs text-gray-400 hover:text-[#7a9985] border border-gray-200 hover:border-[#a3bcaa] rounded px-2 py-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  套用上次內容
+                </button>
+              </div>
               <div className="space-y-3">
                 {(['short', 'mid', 'long'] as GoalKey[]).map(key => {
                   const goalText = key === 'short' ? selectedCase.shortGoal : key === 'mid' ? selectedCase.midGoal : selectedCase.longGoal
