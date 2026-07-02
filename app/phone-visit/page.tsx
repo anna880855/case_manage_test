@@ -5,7 +5,7 @@ import { useStore } from '@/lib/store'
 import type { Case, Sentence, HealthBureauFields } from '@/lib/types'
 import { EMPTY_HEALTH_BUREAU_FIELDS } from '@/lib/types'
 import { AI_STYLE_GUIDE } from '@/lib/aiStyle'
-import { splitContent, toRocDate } from '@/lib/healthBureauExport'
+import { splitContent } from '@/lib/healthBureauExport'
 
 const CATEGORIES = ['service', 'physical', 'family', 'plan'] as const
 type PhoneCategory = typeof CATEGORIES[number]
@@ -117,26 +117,13 @@ function parseGoalBlock(content: string): Record<GoalKey, { status: string; perc
   return result
 }
 
-// The Apps Script phone-visit sheet only stores the 衛生局 report's split-out fields
-// (trackingAdaptation / goalAchievement / planAppropriateness), not the raw generated
-// content. Re-join them in the same order splitContent() produces so parsePlanBlock /
-// parseGoalBlock can read them back the same way they read local records.
-function latestRemoteRowForIdNumber(rows: string[][], idNumber: string): string[] | undefined {
-  const id = idNumber.trim()
-  if (!id) return undefined
-  const matches = rows.filter(r => (r[0] || '').trim() === id)
-  if (matches.length === 0) return undefined
-  return matches.reduce((latest, r) => ((r[1] || '') > (latest[1] || '') ? r : latest))
-}
-
-function contentFromRemoteRow(row: string[]): string {
-  return [row[21], row[22], row[23]].filter(Boolean).join('\n\n')
-}
-
-function targetFromRemoteRow(row: string[], c?: Case): string {
-  if (row[16] === 'V') return c?.name || ''
-  if (row[17] === 'V') return c?.guardian || ''
-  return ''
+// The case's own lastPhoneVisitContent/lastPhoneVisitDate (synced to its row on the main
+// case sheet on every save via the 'updateCase' action) already holds the exact raw
+// generated content of the most recent visit — no reconstruction needed, unlike the
+// separate phone-visit tab which only stores the split-out 衛生局 report fields.
+function targetFromContent(content: string): string {
+  const m = content.match(/二、電訪對象：([^\n]*)/)
+  return m ? m[1].trim() : ''
 }
 
 function PhoneVisitContent() {
@@ -199,24 +186,17 @@ function PhoneVisitContent() {
     autoSelect()
   }, [mounted, sentences])
 
-  // Cloud phone-visit sheet rows (written by every device on save), used so plan/goal
-  // tracking can be carried forward even when the last visit was saved on another device.
-  const [remotePhoneRows, setRemotePhoneRows] = useState<string[][]>([])
+  // Cloud copy of the case list (each row carries lastPhoneVisitDate/lastPhoneVisitContent,
+  // updated by every device on save), used so plan/goal tracking can be carried forward
+  // even when the last visit was saved on another device.
+  const [remoteCases, setRemoteCases] = useState<Partial<Case>[]>([])
   useEffect(() => {
-    if (!mounted || !settings.appsScriptUrl || !settings.phoneVisitSheetName) return
-    fetch('/api/update-case', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        appsScriptUrl: settings.appsScriptUrl,
-        action: 'getPhoneVisits',
-        sheetName: settings.phoneVisitSheetName,
-      }),
-    })
+    if (!mounted || !settings.appsScriptUrl) return
+    fetch(`/api/sync?url=${encodeURIComponent(settings.appsScriptUrl)}`)
       .then(res => res.json())
-      .then(data => { if (data.synced) setRemotePhoneRows(data.rows || []) })
+      .then(data => { if (!data.error) setRemoteCases(data.cases || []) })
       .catch(() => {})
-  }, [mounted, settings.appsScriptUrl, settings.phoneVisitSheetName])
+  }, [mounted, settings.appsScriptUrl])
 
   const selectedCase = cases.find(c => c.id === selectedCaseId)
   const recentVisits = selectedCaseId ? getPhoneVisitsByCase(selectedCaseId).slice(0, 2) : []
@@ -264,13 +244,15 @@ function PhoneVisitContent() {
     const c = cases.find(x => x.id === caseId)
     const prevVisits = getPhoneVisitsByCase(caseId)
     const localLatest = prevVisits[0]
-    const localRoc = localLatest ? toRocDate(localLatest.date) : ''
-    const remoteRow = c ? latestRemoteRowForIdNumber(remotePhoneRows, c.idNumber) : undefined
-    const remoteRoc = remoteRow ? (remoteRow[1] || '') : ''
-    if (remoteRow && remoteRoc > localRoc) {
-      return { content: contentFromRemoteRow(remoteRow), target: targetFromRemoteRow(remoteRow, c), hasPrev: true }
+    const idNumber = c?.idNumber?.trim()
+    const remoteCase = idNumber ? remoteCases.find(r => (r.idNumber || '').trim() === idNumber) : undefined
+    const remoteContent = remoteCase?.lastPhoneVisitContent
+    const remoteDate = remoteCase?.lastPhoneVisitDate || ''
+    const localDate = localLatest?.date || ''
+    if (remoteContent && remoteDate > localDate) {
+      return { content: remoteContent, target: targetFromContent(remoteContent), hasPrev: true }
     }
-    return { content: localLatest?.content, target: localLatest?.target, hasPrev: !!localLatest || !!remoteRow }
+    return { content: localLatest?.content, target: localLatest?.target, hasPrev: !!localLatest || !!remoteContent }
   }
 
   // Pre-fill target / plan tracking / goal tracking from the case's last phone visit.
@@ -285,7 +267,7 @@ function PhoneVisitContent() {
     setTarget(prevTarget || c?.guardian || '')
     setPlanBlock(content ? parsePlanBlock(content) : { ...PLAN_DEFAULTS })
     setGoalTracking(content ? parseGoalBlock(content) : { ...EMPTY_GOAL_TRACKING })
-  }, [mounted, selectedCaseId, remotePhoneRows])
+  }, [mounted, selectedCaseId, remoteCases])
 
   const applyPrevPlanBlock = () => {
     if (!selectedCaseId) return
