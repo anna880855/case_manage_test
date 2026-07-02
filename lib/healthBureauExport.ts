@@ -30,7 +30,7 @@ const HEADER = [
   '其他處理事項',
 ]
 
-function toRocDate(raw: string): string {
+export function toRocDate(raw: string): string {
   if (!raw) return ''
   const d = new Date(raw)
   if (isNaN(d.getTime())) return ''

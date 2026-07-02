@@ -5,7 +5,7 @@ import { useStore } from '@/lib/store'
 import type { Case, Sentence, HealthBureauFields } from '@/lib/types'
 import { EMPTY_HEALTH_BUREAU_FIELDS } from '@/lib/types'
 import { AI_STYLE_GUIDE } from '@/lib/aiStyle'
-import { splitContent } from '@/lib/healthBureauExport'
+import { splitContent, toRocDate } from '@/lib/healthBureauExport'
 
 const CATEGORIES = ['service', 'physical', 'family', 'plan'] as const
 type PhoneCategory = typeof CATEGORIES[number]
@@ -117,6 +117,28 @@ function parseGoalBlock(content: string): Record<GoalKey, { status: string; perc
   return result
 }
 
+// The Apps Script phone-visit sheet only stores the 衛生局 report's split-out fields
+// (trackingAdaptation / goalAchievement / planAppropriateness), not the raw generated
+// content. Re-join them in the same order splitContent() produces so parsePlanBlock /
+// parseGoalBlock can read them back the same way they read local records.
+function latestRemoteRowForIdNumber(rows: string[][], idNumber: string): string[] | undefined {
+  const id = idNumber.trim()
+  if (!id) return undefined
+  const matches = rows.filter(r => (r[0] || '').trim() === id)
+  if (matches.length === 0) return undefined
+  return matches.reduce((latest, r) => ((r[1] || '') > (latest[1] || '') ? r : latest))
+}
+
+function contentFromRemoteRow(row: string[]): string {
+  return [row[21], row[22], row[23]].filter(Boolean).join('\n\n')
+}
+
+function targetFromRemoteRow(row: string[], c?: Case): string {
+  if (row[16] === 'V') return c?.name || ''
+  if (row[17] === 'V') return c?.guardian || ''
+  return ''
+}
+
 function PhoneVisitContent() {
   const searchParams = useSearchParams()
   const { cases, sentences, settings, addPhoneVisit, getPhoneVisitsByCase, updateCase } = useStore()
@@ -177,6 +199,25 @@ function PhoneVisitContent() {
     autoSelect()
   }, [mounted, sentences])
 
+  // Cloud phone-visit sheet rows (written by every device on save), used so plan/goal
+  // tracking can be carried forward even when the last visit was saved on another device.
+  const [remotePhoneRows, setRemotePhoneRows] = useState<string[][]>([])
+  useEffect(() => {
+    if (!mounted || !settings.appsScriptUrl || !settings.phoneVisitSheetName) return
+    fetch('/api/update-case', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        appsScriptUrl: settings.appsScriptUrl,
+        action: 'getPhoneVisits',
+        sheetName: settings.phoneVisitSheetName,
+      }),
+    })
+      .then(res => res.json())
+      .then(data => { if (data.synced) setRemotePhoneRows(data.rows || []) })
+      .catch(() => {})
+  }, [mounted, settings.appsScriptUrl, settings.phoneVisitSheetName])
+
   const selectedCase = cases.find(c => c.id === selectedCaseId)
   const recentVisits = selectedCaseId ? getPhoneVisitsByCase(selectedCaseId).slice(0, 2) : []
 
@@ -216,6 +257,22 @@ function PhoneVisitContent() {
     autoSelect(c)
   }
 
+  // Find the most recent visit for a case, comparing the locally-saved record against
+  // the cloud sheet (written by every device on save) and using whichever is newer, so
+  // "套用上次內容" works even when the last visit was saved on a different device.
+  const getLatestVisitSource = (caseId: string): { content?: string; target?: string; hasPrev: boolean } => {
+    const c = cases.find(x => x.id === caseId)
+    const prevVisits = getPhoneVisitsByCase(caseId)
+    const localLatest = prevVisits[0]
+    const localRoc = localLatest ? toRocDate(localLatest.date) : ''
+    const remoteRow = c ? latestRemoteRowForIdNumber(remotePhoneRows, c.idNumber) : undefined
+    const remoteRoc = remoteRow ? (remoteRow[1] || '') : ''
+    if (remoteRow && remoteRoc > localRoc) {
+      return { content: contentFromRemoteRow(remoteRow), target: targetFromRemoteRow(remoteRow, c), hasPrev: true }
+    }
+    return { content: localLatest?.content, target: localLatest?.target, hasPrev: !!localLatest || !!remoteRow }
+  }
+
   // Pre-fill target / plan tracking / goal tracking from the case's last phone visit.
   // Runs both when a case is picked from the list and when the page is opened directly
   // via /phone-visit?caseId=... (e.g. from a case's detail page), which previously
@@ -224,24 +281,25 @@ function PhoneVisitContent() {
   useEffect(() => {
     if (!mounted || !selectedCaseId) return
     const c = cases.find(x => x.id === selectedCaseId)
-    const prevVisits = getPhoneVisitsByCase(selectedCaseId)
-    const prevTarget = prevVisits.length > 0 ? prevVisits[0].target : ''
+    const { content, target: prevTarget } = getLatestVisitSource(selectedCaseId)
     setTarget(prevTarget || c?.guardian || '')
-    setPlanBlock(prevVisits.length > 0 ? parsePlanBlock(prevVisits[0].content) : { ...PLAN_DEFAULTS })
-    setGoalTracking(prevVisits.length > 0 ? parseGoalBlock(prevVisits[0].content) : { ...EMPTY_GOAL_TRACKING })
-  }, [mounted, selectedCaseId])
+    setPlanBlock(content ? parsePlanBlock(content) : { ...PLAN_DEFAULTS })
+    setGoalTracking(content ? parseGoalBlock(content) : { ...EMPTY_GOAL_TRACKING })
+  }, [mounted, selectedCaseId, remotePhoneRows])
 
   const applyPrevPlanBlock = () => {
     if (!selectedCaseId) return
-    const prevVisits = getPhoneVisitsByCase(selectedCaseId)
-    if (prevVisits.length > 0) setPlanBlock(parsePlanBlock(prevVisits[0].content))
+    const { content } = getLatestVisitSource(selectedCaseId)
+    if (content) setPlanBlock(parsePlanBlock(content))
   }
 
   const applyPrevGoalBlock = () => {
     if (!selectedCaseId) return
-    const prevVisits = getPhoneVisitsByCase(selectedCaseId)
-    if (prevVisits.length > 0) setGoalTracking(parseGoalBlock(prevVisits[0].content))
+    const { content } = getLatestVisitSource(selectedCaseId)
+    if (content) setGoalTracking(parseGoalBlock(content))
   }
+
+  const hasPrevVisit = (caseId: string) => getLatestVisitSource(caseId).hasPrev
 
   const pickedSentences = CATEGORIES
     .filter(cat => picked[cat])
@@ -558,7 +616,7 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
                 <h3 className="text-sm font-semibold text-gray-700">目標追蹤進度</h3>
                 <button
                   onClick={applyPrevGoalBlock}
-                  disabled={!selectedCaseId || getPhoneVisitsByCase(selectedCaseId).length === 0}
+                  disabled={!selectedCaseId || !hasPrevVisit(selectedCaseId)}
                   className="text-xs text-gray-400 hover:text-[#7a9985] border border-gray-200 hover:border-[#a3bcaa] rounded px-2 py-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   套用上次內容
