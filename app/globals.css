@@ -19,3 +19,25 @@ body {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* Print-only content: everything is hidden except .print-area, which is
+   pulled out to its own page regardless of where it sits in the layout. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-area, .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}
+@media screen {
+  .print-area {
+    display: none;
+  }
+}

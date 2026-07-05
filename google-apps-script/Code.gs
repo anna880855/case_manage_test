@@ -133,6 +133,15 @@ function doGet(e) {
     } else if (action === 'getHomeVisits') {
       const sheetName = e.parameter.sheetName || '';
       result = { visits: getHomeVisitRows(sheetName) };
+    } else if (action === 'getReferrals') {
+      const sheetName = e.parameter.sheetName || '';
+      result = { referrals: getReferralRows(sheetName) };
+    } else if (action === 'updateReferralTracking') {
+      const sheetName = e.parameter.sheetName || '';
+      const id = e.parameter.id || '';
+      const fields = JSON.parse(e.parameter.fields || '{}');
+      updateReferralTrackingRow(sheetName, id, fields);
+      result = { updated: true };
     } else if (action === 'getDrafts') {
       const caseNumber = e.parameter.caseNumber || '';
       result = { drafts: getDrafts(caseNumber) };
@@ -321,6 +330,16 @@ const HOME_VISIT_HEADERS = [
   '家訪計劃內容', '建立時間',
 ];
 
+const REFERRAL_HEADERS = [
+  '個案姓名', '個案編號', '身分證字號', '轉介日期',
+  '轉介類型', '轉介類型其他說明', '收案單位',
+  '聯絡電話對象', '聯絡電話', '主要聯絡人關係', '個案概況',
+  '個管姓名', '追蹤狀態', '追蹤備註', '回覆日期', '建立時間', '本機ID',
+];
+
+const REFERRAL_TRACKING_LABEL = { pending: '待回覆', accepted: '已提供服務', declined: '無法提供服務' };
+const REFERRAL_TRACKING_REVERSE = { '待回覆': 'pending', '已提供服務': 'accepted', '無法提供服務': 'declined' };
+
 function getOrCreateVisitSheet(sheetName, headers) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(sheetName);
@@ -376,6 +395,19 @@ function appendVisitRow(sheetName, record) {
       JSON.stringify(sd.services || []), sd.transportation || '', sd.transportHospital || '',
       sd.aidsDetail || '', sd.respiteDetail || '', sd.referral || '',
       record.planContent || '', new Date(),
+    ]);
+    return;
+  }
+
+  if (record.kind === 'referral') {
+    const sheet = getOrCreateVisitSheet(sheetName, REFERRAL_HEADERS);
+    sheet.appendRow([
+      record.caseName || '', record.caseNumber || '', record.idNumber || '', record.date || '',
+      (record.referralTypes || []).join('、'), record.referralTypeOtherNote || '', record.receivingUnit || '',
+      record.contactPersonType === 'guardian' ? '主要聯絡人' : '本人', record.contactPhone || '', record.relationship || '',
+      record.caseOverview || '',
+      record.managerName || '', REFERRAL_TRACKING_LABEL[record.trackingStatus] || REFERRAL_TRACKING_LABEL.pending,
+      record.trackingNote || '', record.trackingDate || '', new Date(), record.id || '',
     ]);
     return;
   }
@@ -455,6 +487,54 @@ function getPhoneVisitRows(sheetName) {
   return data.slice(1).map(function(row) {
     return row.map(function(cell) { return cell instanceof Date ? '' : String(cell || ''); });
   });
+}
+
+// 讀回轉介紀錄，重建為物件陣列，供跨裝置查看轉介及追蹤狀態使用
+function getReferralRows(sheetName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return [];
+  return data.slice(1).map(function(row) {
+    return {
+      id: String(row[16] || ''),
+      caseName: String(row[0] || ''),
+      caseId: String(row[1] || ''),
+      idNumber: String(row[2] || ''),
+      date: toLocalDateStr(row[3]),
+      referralTypes: String(row[4] || '').split('、').filter(Boolean),
+      referralTypeOtherNote: String(row[5] || ''),
+      receivingUnit: String(row[6] || ''),
+      contactPersonType: String(row[7] || '') === '主要聯絡人' ? 'guardian' : 'self',
+      relationship: String(row[9] || ''),
+      caseOverview: String(row[10] || ''),
+      managerName: String(row[11] || ''),
+      trackingStatus: REFERRAL_TRACKING_REVERSE[String(row[12] || '')] || 'pending',
+      trackingNote: String(row[13] || ''),
+      trackingDate: String(row[14] || ''),
+      createdAt: row[15] instanceof Date ? row[15].toISOString() : String(row[15] || ''),
+    };
+  });
+}
+
+// 依本機 ID 找到轉介列，更新追蹤（回覆單）欄位
+function updateReferralTrackingRow(sheetName, id, fields) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) throw new Error('找不到轉介紀錄分頁：' + sheetName);
+  const data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][16] || '') === id) {
+      if (fields.trackingStatus !== undefined) {
+        sheet.getRange(i + 1, 13).setValue(REFERRAL_TRACKING_LABEL[fields.trackingStatus] || REFERRAL_TRACKING_LABEL.pending);
+      }
+      if (fields.trackingNote !== undefined) sheet.getRange(i + 1, 14).setValue(fields.trackingNote);
+      if (fields.trackingDate !== undefined) sheet.getRange(i + 1, 15).setValue(fields.trackingDate);
+      return;
+    }
+  }
+  throw new Error('找不到對應的轉介紀錄');
 }
 
 // ====================================================

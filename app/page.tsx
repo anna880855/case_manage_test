@@ -513,6 +513,8 @@ export default function HomePage() {
 
 function CaseRow({ case_: c, visitFilter }: { case_: Case; visitFilter: VisitFilter }) {
   const { hasPhoneThisMonth, hasHomeInSixMonths } = useVisitStatus(c)
+  const { referrals } = useStore()
+  const pendingReferrals = referrals.filter(r => r.caseId === c.id && r.trackingStatus === 'pending').length
 
   return (
     <Link
@@ -533,6 +535,11 @@ function CaseRow({ case_: c, visitFilter }: { case_: Case; visitFilter: VisitFil
           )}
           {c.status === 'active' && !hasHomeInSixMonths && (
             <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-[#f0ebe0] text-[#9b7a50]">未家訪</span>
+          )}
+          {pendingReferrals > 0 && (
+            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-[#e6ede7] text-[#7a9985]">
+              📮 轉介待回覆 {pendingReferrals}
+            </span>
           )}
         </div>
         <div className="flex gap-4 mt-0.5 text-sm text-gray-400">

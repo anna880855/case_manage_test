@@ -112,13 +112,44 @@ export interface Sentence {
   text: string
 }
 
+export const REFERRAL_TYPES = ['醫事/社照C據點', '失智據點', '失智共照中心', '到宅牙醫', '其他'] as const
+
+export type ReferralTrackingStatus = 'pending' | 'accepted' | 'declined'
+
+export interface ReferralRecord {
+  id: string
+  caseId: string
+  caseName: string
+  date: string // 個管核章/日期（轉介建立日期）
+  referralTypes: string[]
+  referralTypeOtherNote: string
+  receivingUnit: string // 收案單位
+  contactPersonType: 'self' | 'guardian' // 聯絡電話：本人 / 主要聯絡人
+  relationship: string // 主要聯絡人與個案關係
+  caseOverview: string // 個案概況（近三個月身心、家庭概況）
+  managerName: string // 個管核章姓名（建立當下的個管師姓名）
+  createdAt: string
+  // 追蹤（回覆單）
+  trackingStatus: ReferralTrackingStatus
+  trackingNote: string // 無法提供服務原因／處理情形
+  trackingDate: string // 回覆日期
+}
+
+export const EMPTY_REFERRAL_TRACKING = {
+  trackingStatus: 'pending' as ReferralTrackingStatus,
+  trackingNote: '',
+  trackingDate: '',
+}
+
 export interface Settings {
   appsScriptUrl: string
   claudeApiKey: string
   organizationName: string
+  organizationEmail: string
   managerName: string
   managerPhone: string
   managerIdNumber: string
   phoneVisitSheetName: string
   homeVisitSheetName: string
+  referralSheetName: string
 }
