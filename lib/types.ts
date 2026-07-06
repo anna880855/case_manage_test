@@ -127,6 +127,7 @@ export interface ReferralRecord {
   contactPersonType: 'self' | 'guardian' // 聯絡電話：本人 / 主要聯絡人
   relationship: string // 主要聯絡人與個案關係
   caseOverview: string // 個案概況（近三個月身心、家庭概況）
+  referralNeeds: string // 轉介需求
   managerName: string // 個管核章姓名（建立當下的個管師姓名）
   createdAt: string
   // 追蹤（回覆單）
