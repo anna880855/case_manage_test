@@ -333,7 +333,7 @@ const HOME_VISIT_HEADERS = [
 const REFERRAL_HEADERS = [
   '個案姓名', '個案編號', '身分證字號', '轉介日期',
   '轉介類型', '轉介類型其他說明', '收案單位',
-  '聯絡電話對象', '聯絡電話', '主要聯絡人關係', '個案概況',
+  '聯絡電話對象', '聯絡電話', '主要聯絡人關係', '個案概況', '轉介需求',
   '個管姓名', '追蹤狀態', '追蹤備註', '回覆日期', '建立時間', '本機ID',
 ];
 
@@ -405,7 +405,7 @@ function appendVisitRow(sheetName, record) {
       record.caseName || '', record.caseNumber || '', record.idNumber || '', record.date || '',
       (record.referralTypes || []).join('、'), record.referralTypeOtherNote || '', record.receivingUnit || '',
       record.contactPersonType === 'guardian' ? '主要聯絡人' : '本人', record.contactPhone || '', record.relationship || '',
-      record.caseOverview || '',
+      record.caseOverview || '', record.referralNeeds || '',
       record.managerName || '', REFERRAL_TRACKING_LABEL[record.trackingStatus] || REFERRAL_TRACKING_LABEL.pending,
       record.trackingNote || '', record.trackingDate || '', new Date(), record.id || '',
     ]);
@@ -498,7 +498,7 @@ function getReferralRows(sheetName) {
   if (data.length < 2) return [];
   return data.slice(1).map(function(row) {
     return {
-      id: String(row[16] || ''),
+      id: String(row[17] || ''),
       caseName: String(row[0] || ''),
       caseId: String(row[1] || ''),
       idNumber: String(row[2] || ''),
@@ -509,11 +509,12 @@ function getReferralRows(sheetName) {
       contactPersonType: String(row[7] || '') === '主要聯絡人' ? 'guardian' : 'self',
       relationship: String(row[9] || ''),
       caseOverview: String(row[10] || ''),
-      managerName: String(row[11] || ''),
-      trackingStatus: REFERRAL_TRACKING_REVERSE[String(row[12] || '')] || 'pending',
-      trackingNote: String(row[13] || ''),
-      trackingDate: String(row[14] || ''),
-      createdAt: row[15] instanceof Date ? row[15].toISOString() : String(row[15] || ''),
+      referralNeeds: String(row[11] || ''),
+      managerName: String(row[12] || ''),
+      trackingStatus: REFERRAL_TRACKING_REVERSE[String(row[13] || '')] || 'pending',
+      trackingNote: String(row[14] || ''),
+      trackingDate: String(row[15] || ''),
+      createdAt: row[16] instanceof Date ? row[16].toISOString() : String(row[16] || ''),
     };
   });
 }
@@ -525,12 +526,12 @@ function updateReferralTrackingRow(sheetName, id, fields) {
   if (!sheet) throw new Error('找不到轉介紀錄分頁：' + sheetName);
   const data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
-    if (String(data[i][16] || '') === id) {
+    if (String(data[i][17] || '') === id) {
       if (fields.trackingStatus !== undefined) {
-        sheet.getRange(i + 1, 13).setValue(REFERRAL_TRACKING_LABEL[fields.trackingStatus] || REFERRAL_TRACKING_LABEL.pending);
+        sheet.getRange(i + 1, 14).setValue(REFERRAL_TRACKING_LABEL[fields.trackingStatus] || REFERRAL_TRACKING_LABEL.pending);
       }
-      if (fields.trackingNote !== undefined) sheet.getRange(i + 1, 14).setValue(fields.trackingNote);
-      if (fields.trackingDate !== undefined) sheet.getRange(i + 1, 15).setValue(fields.trackingDate);
+      if (fields.trackingNote !== undefined) sheet.getRange(i + 1, 15).setValue(fields.trackingNote);
+      if (fields.trackingDate !== undefined) sheet.getRange(i + 1, 16).setValue(fields.trackingDate);
       return;
     }
   }

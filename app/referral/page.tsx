@@ -59,6 +59,7 @@ function ReferralContent() {
   const [contactPersonType, setContactPersonType] = useState<'self' | 'guardian'>('self')
   const [relationship, setRelationship] = useState('')
   const [caseOverview, setCaseOverview] = useState('')
+  const [referralNeeds, setReferralNeeds] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
@@ -71,6 +72,7 @@ function ReferralContent() {
     setContactPersonType('self')
     setRelationship('')
     setCaseOverview('')
+    setReferralNeeds('')
     setSaved(false)
     setError('')
   }
@@ -99,6 +101,7 @@ function ReferralContent() {
     contactPersonType,
     relationship,
     caseOverview,
+    referralNeeds,
     managerName: settings.managerName,
     createdAt: new Date().toISOString(),
     ...EMPTY_REFERRAL_TRACKING,
@@ -135,6 +138,7 @@ function ReferralContent() {
               contactPhone: phonePreview,
               relationship,
               caseOverview,
+              referralNeeds,
               managerName: settings.managerName,
               trackingStatus: record.trackingStatus,
               trackingNote: record.trackingNote,
@@ -396,6 +400,17 @@ function ReferralContent() {
                 />
               </div>
 
+              <div className="bg-white rounded-xl border border-gray-100 p-4">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">轉介需求</label>
+                <textarea
+                  value={referralNeeds}
+                  onChange={e => setReferralNeeds(e.target.value)}
+                  rows={3}
+                  placeholder="請描述個案此次轉介之具體需求…"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa] resize-none"
+                />
+              </div>
+
               {error && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 text-sm text-amber-700">
                   ⚠ {error}
@@ -568,6 +583,12 @@ function ReferralPrintView({ data, case_, settings }: { data: ReferralRecord; ca
             <td className={cellCls} colSpan={3} style={{ height: '110px' }}>
               <p className="text-xs text-gray-500 mb-1">近三個月個案之身心、家庭概況：</p>
               <p className="whitespace-pre-wrap">{data.caseOverview}</p>
+            </td>
+          </tr>
+          <tr>
+            <td className={labelCls}>轉介需求</td>
+            <td className={cellCls} colSpan={3} style={{ height: '80px' }}>
+              <p className="whitespace-pre-wrap">{data.referralNeeds}</p>
             </td>
           </tr>
           <tr>
