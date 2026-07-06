@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Case, PhoneVisitRecord, HomeVisitRecord, Sentence, Settings } from './types'
+import type { Case, PhoneVisitRecord, HomeVisitRecord, ReferralRecord, Sentence, Settings } from './types'
 
 export const DEFAULT_SENTENCES: Sentence[] = [
   // ── service（服務使用，依長照服務大項目分類：居家照顧／日間照顧／交通車服務／喘息服務）──
@@ -72,6 +72,7 @@ interface StoreState {
   cases: Case[]
   phoneVisits: PhoneVisitRecord[]
   homeVisits: HomeVisitRecord[]
+  referrals: ReferralRecord[]
   sentences: Sentence[]
   settings: Settings
   disabilityReminderDismissed: Record<string, string>
@@ -89,6 +90,10 @@ interface StoreActions {
   deleteHomeVisit: (id: string) => void
   importPhoneVisits: (visits: PhoneVisitRecord[]) => void
   importHomeVisits: (visits: HomeVisitRecord[]) => void
+  addReferral: (referral: ReferralRecord) => void
+  updateReferral: (id: string, fields: Partial<ReferralRecord>) => void
+  deleteReferral: (id: string) => void
+  importReferrals: (referrals: ReferralRecord[]) => void
   addSentence: (sentence: Sentence) => void
   deleteSentence: (id: string) => void
   setSentences: (sentences: Sentence[]) => void
@@ -96,6 +101,7 @@ interface StoreActions {
   getCaseById: (id: string) => Case | undefined
   getPhoneVisitsByCase: (caseId: string) => PhoneVisitRecord[]
   getHomeVisitsByCase: (caseId: string) => HomeVisitRecord[]
+  getReferralsByCase: (caseId: string) => ReferralRecord[]
   dismissDisabilityReminder: (caseId: string, periodKey: string) => void
 }
 
@@ -105,16 +111,19 @@ export const useStore = create<StoreState & StoreActions>()(
       cases: [],
       phoneVisits: [],
       homeVisits: [],
+      referrals: [],
       sentences: DEFAULT_SENTENCES,
       settings: {
         appsScriptUrl: '',
         claudeApiKey: '',
         organizationName: '',
+        organizationEmail: '',
         managerName: '林侑萱',
         managerPhone: '0902692567',
         managerIdNumber: '',
         phoneVisitSheetName: '電訪紀錄',
         homeVisitSheetName: '家訪紀錄',
+        referralSheetName: '轉介紀錄',
       },
       disabilityReminderDismissed: {},
 
@@ -138,6 +147,7 @@ export const useStore = create<StoreState & StoreActions>()(
           cases: state.cases.filter((c) => c.id !== id),
           phoneVisits: state.phoneVisits.filter((v) => v.caseId !== id),
           homeVisits: state.homeVisits.filter((v) => v.caseId !== id),
+          referrals: state.referrals.filter((r) => r.caseId !== id),
         })),
 
       addPhoneVisit: (visit) =>
@@ -170,6 +180,24 @@ export const useStore = create<StoreState & StoreActions>()(
           return { homeVisits: [...toAdd, ...state.homeVisits] }
         }),
 
+      addReferral: (referral) =>
+        set((state) => ({ referrals: [referral, ...state.referrals] })),
+
+      updateReferral: (id, fields) =>
+        set((state) => ({
+          referrals: state.referrals.map((r) => r.id === id ? { ...r, ...fields } : r),
+        })),
+
+      deleteReferral: (id) =>
+        set((state) => ({ referrals: state.referrals.filter((r) => r.id !== id) })),
+
+      importReferrals: (referrals) =>
+        set((state) => {
+          const existingIds = new Set(state.referrals.map((r) => r.id))
+          const toAdd = referrals.filter((r) => !existingIds.has(r.id))
+          return { referrals: [...toAdd, ...state.referrals] }
+        }),
+
       addSentence: (sentence) =>
         set((state) => ({ sentences: [...state.sentences, sentence] })),
 
@@ -189,6 +217,9 @@ export const useStore = create<StoreState & StoreActions>()(
       getHomeVisitsByCase: (caseId) =>
         get().homeVisits.filter((v) => v.caseId === caseId),
 
+      getReferralsByCase: (caseId) =>
+        get().referrals.filter((r) => r.caseId === caseId),
+
       dismissDisabilityReminder: (caseId, periodKey) =>
         set((state) => ({
           disabilityReminderDismissed: { ...state.disabilityReminderDismissed, [caseId]: periodKey },
@@ -196,7 +227,7 @@ export const useStore = create<StoreState & StoreActions>()(
     }),
     {
       name: 'case-mgmt-v1',
-      version: 9,
+      version: 10,
       migrate: (persistedState: unknown, version: number) => {
         let state = persistedState as StoreState & StoreActions
         if (version < 2) {
@@ -248,6 +279,12 @@ export const useStore = create<StoreState & StoreActions>()(
           const s = (state.settings || {}) as unknown as Record<string, unknown>
           if (!s.managerIdNumber) s.managerIdNumber = ''
           state = { ...state, settings: s as unknown as Settings }
+        }
+        if (version < 10) {
+          const s = (state.settings || {}) as unknown as Record<string, unknown>
+          if (!s.organizationEmail) s.organizationEmail = ''
+          if (!s.referralSheetName) s.referralSheetName = '轉介紀錄'
+          state = { ...state, settings: s as unknown as Settings, referrals: state.referrals || [] }
         }
         return state
       },

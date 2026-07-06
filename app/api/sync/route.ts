@@ -3,14 +3,16 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get('url')
   const homeVisitSheetName = req.nextUrl.searchParams.get('homeVisitSheetName') || '家訪紀錄'
+  const referralSheetName = req.nextUrl.searchParams.get('referralSheetName') || '轉介紀錄'
   if (!url) {
     return NextResponse.json({ error: '缺少 Apps Script URL' }, { status: 400 })
   }
 
   try {
-    const [casesRes, homeVisitsRes] = await Promise.all([
+    const [casesRes, homeVisitsRes, referralsRes] = await Promise.all([
       fetch(`${url}?action=getCasesOnly`, { redirect: 'follow', cache: 'no-store' }),
       fetch(`${url}?action=getHomeVisits&sheetName=${encodeURIComponent(homeVisitSheetName)}`, { redirect: 'follow', cache: 'no-store' }),
+      fetch(`${url}?action=getReferrals&sheetName=${encodeURIComponent(referralSheetName)}`, { redirect: 'follow', cache: 'no-store' }),
     ])
 
     if (!casesRes.ok) throw new Error(`HTTP ${casesRes.status}`)
@@ -23,7 +25,13 @@ export async function GET(req: NextRequest) {
       if (hvJson.ok) homeVisits = hvJson.data?.visits || []
     }
 
-    return NextResponse.json({ ...casesJson.data, homeVisits })
+    let referrals: unknown[] = []
+    if (referralsRes.ok) {
+      const refJson = await referralsRes.json()
+      if (refJson.ok) referrals = refJson.data?.referrals || []
+    }
+
+    return NextResponse.json({ ...casesJson.data, homeVisits, referrals })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : '同步失敗'
     return NextResponse.json({ error: msg }, { status: 500 })

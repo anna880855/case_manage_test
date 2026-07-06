@@ -23,7 +23,7 @@ const STATUS_FILTERS = [
   { value: 'all', label: '全部' },
 ]
 
-type VisitFilter = 'all' | 'no-phone' | 'no-home'
+type VisitFilter = 'all' | 'no-phone' | 'no-home' | 'pending-referral'
 
 function useVisitStatus(c: Case) {
   const { phoneVisits, homeVisits } = useStore()
@@ -293,7 +293,7 @@ function NewCaseModal({ onClose }: { onClose: () => void }) {
 }
 
 export default function HomePage() {
-  const { cases, phoneVisits, homeVisits, disabilityReminderDismissed, dismissDisabilityReminder } = useStore()
+  const { cases, phoneVisits, homeVisits, referrals, disabilityReminderDismissed, dismissDisabilityReminder } = useStore()
   const [mounted, setMounted] = useState(false)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('active')
@@ -346,6 +346,13 @@ export default function HomePage() {
     return !homeVisits.some(v => v.caseId === c.id && isWithinSixMonths(v.date))
   }), [activeCases, homeVisits, sixMonthsAgo])
 
+  const pendingReferrals = useMemo(() => referrals.filter(r => r.trackingStatus === 'pending'), [referrals])
+  const pendingReferralCaseIds = useMemo(() => new Set(pendingReferrals.map(r => r.caseId)), [pendingReferrals])
+  const casesWithPendingReferral = useMemo(
+    () => cases.filter(c => pendingReferralCaseIds.has(c.id)),
+    [cases, pendingReferralCaseIds]
+  )
+
   const counts = useMemo(() => ({
     active: cases.filter(c => c.status === 'active').length,
     suspended: cases.filter(c => c.status === 'suspended').length,
@@ -356,6 +363,7 @@ export default function HomePage() {
     let pool = cases
     if (visitFilter === 'no-phone') pool = noPhoneThisMonth
     else if (visitFilter === 'no-home') pool = noHomeInSixMonths
+    else if (visitFilter === 'pending-referral') pool = casesWithPendingReferral
     else pool = cases.filter(c => statusFilter === 'all' || c.status === statusFilter)
 
     const q = search.trim().toLowerCase()
@@ -366,7 +374,7 @@ export default function HomePage() {
       (c.phone || '').includes(q) ||
       (c.address || '').toLowerCase().includes(q)
     )
-  }, [cases, search, statusFilter, visitFilter, noPhoneThisMonth, noHomeInSixMonths])
+  }, [cases, search, statusFilter, visitFilter, noPhoneThisMonth, noHomeInSixMonths, casesWithPendingReferral])
 
   if (!mounted) return <div className="text-center py-20 text-gray-400 text-sm">載入中...</div>
 
@@ -393,7 +401,7 @@ export default function HomePage() {
 
       {/* 待訪視提醒 */}
       {cases.length > 0 && (
-        <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="grid grid-cols-3 gap-3 mb-4">
           <button
             onClick={() => setVisitFilter(v => v === 'no-phone' ? 'all' : 'no-phone')}
             className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all ${
@@ -423,6 +431,21 @@ export default function HomePage() {
               <p className="text-xs text-gray-400">位在案個案</p>
             </div>
             <span className="text-2xl">🏠</span>
+          </button>
+          <button
+            onClick={() => setVisitFilter(v => v === 'pending-referral' ? 'all' : 'pending-referral')}
+            className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all ${
+              visitFilter === 'pending-referral'
+                ? 'bg-[#e6ede7] border-[#a3bcaa] ring-2 ring-[#a3bcaa]'
+                : 'bg-white border-gray-100 hover:border-[#a3bcaa]'
+            }`}
+          >
+            <div className="text-left">
+              <p className="text-xs text-gray-500">待回覆的轉介</p>
+              <p className="text-2xl font-bold text-[#7a9985]">{pendingReferrals.length}</p>
+              <p className="text-xs text-gray-400">筆轉介紀錄</p>
+            </div>
+            <span className="text-2xl">📮</span>
           </button>
         </div>
       )}
@@ -485,9 +508,13 @@ export default function HomePage() {
 
       {visitFilter !== 'all' && (
         <div className={`mb-3 px-4 py-2 rounded-lg text-sm font-medium ${
-          visitFilter === 'no-phone' ? 'bg-[#f0e6e6] text-[#9b6464]' : 'bg-[#f0ebe0] text-[#9b7a50]'
+          visitFilter === 'no-phone' ? 'bg-[#f0e6e6] text-[#9b6464]'
+            : visitFilter === 'no-home' ? 'bg-[#f0ebe0] text-[#9b7a50]'
+            : 'bg-[#e6ede7] text-[#7a9985]'
         }`}>
-          {visitFilter === 'no-phone' ? `📞 本月（${thisMonth + 1}月）尚未電訪的在案個案` : '🏠 近6個月尚未家訪的在案個案'}
+          {visitFilter === 'no-phone' ? `📞 本月（${thisMonth + 1}月）尚未電訪的在案個案`
+            : visitFilter === 'no-home' ? '🏠 近6個月尚未家訪的在案個案'
+            : '📮 有待回覆轉介的個案'}
           {' '}共 {filtered.length} 位
         </div>
       )}
@@ -513,6 +540,8 @@ export default function HomePage() {
 
 function CaseRow({ case_: c, visitFilter }: { case_: Case; visitFilter: VisitFilter }) {
   const { hasPhoneThisMonth, hasHomeInSixMonths } = useVisitStatus(c)
+  const { referrals } = useStore()
+  const pendingReferrals = referrals.filter(r => r.caseId === c.id && r.trackingStatus === 'pending')
 
   return (
     <Link
@@ -540,6 +569,11 @@ function CaseRow({ case_: c, visitFilter }: { case_: Case; visitFilter: VisitFil
           {c.careLevel && <span>等級 {c.careLevel}</span>}
           {c.guardian && <span>照顧者 {c.guardian}</span>}
         </div>
+        {pendingReferrals.length > 0 && (
+          <p className="mt-1 text-xs text-[#7a9985] bg-[#e6ede7] rounded px-2 py-1 truncate">
+            📮 [轉介需求] {pendingReferrals.map(r => r.receivingUnit || r.referralTypes.join('、')).join('、')}（待回覆）
+          </p>
+        )}
         {c.notes && (
           <p className="mt-1 text-xs text-amber-700 bg-amber-50 rounded px-2 py-1 truncate">
             📌 {c.notes}

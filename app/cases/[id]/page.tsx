@@ -12,14 +12,26 @@ const STATUS_OPTIONS: { value: Case['status']; label: string; color: string }[] 
   { value: 'closed', label: '結案', color: 'bg-gray-100 text-gray-500 border-gray-200' },
 ]
 
+const REFERRAL_TRACKING_LABELS: Record<string, string> = {
+  pending: '待回覆',
+  accepted: '已提供服務',
+  declined: '無法提供服務',
+}
+const REFERRAL_TRACKING_COLORS: Record<string, string> = {
+  pending: 'bg-gray-100 text-gray-500',
+  accepted: 'bg-[#dce8de] text-[#607a68]',
+  declined: 'bg-red-50 text-red-500',
+}
+
 export default function CaseDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
-  const { getCaseById, getPhoneVisitsByCase, getHomeVisitsByCase, updateCaseStatus, updateCase, deleteCase, settings } = useStore()
+  const { getCaseById, getPhoneVisitsByCase, getHomeVisitsByCase, getReferralsByCase, updateCaseStatus, updateCase, deleteCase, settings } = useStore()
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
   const c = getCaseById(params.id)
   const phoneVisits = getPhoneVisitsByCase(params.id)
   const homeVisits = getHomeVisitsByCase(params.id)
+  const referrals = getReferralsByCase(params.id)
   const [syncMsg, setSyncMsg] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -401,6 +413,12 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
         >
           🏠 產生家訪計劃
         </Link>
+        <Link
+          href={`/referral?caseId=${c.id}`}
+          className="flex-1 flex items-center justify-center gap-2 py-3 bg-white border-2 border-[#7a9985] text-[#7a9985] rounded-xl hover:bg-[#e6ede7] transition-colors font-medium"
+        >
+          📮 轉介個案
+        </Link>
       </div>
 
       <ServiceArrangementSection c={c} />
@@ -426,6 +444,39 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
                 : []
           }
         />
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-100 p-5 mb-6">
+        <h3 className="font-semibold text-gray-700 mb-3">
+          轉介及追蹤 <span className="text-gray-400 font-normal text-sm">({referrals.length})</span>
+        </h3>
+        {referrals.length === 0 ? (
+          <p className="text-sm text-gray-400">尚無轉介紀錄</p>
+        ) : (
+          <div className="space-y-2">
+            {referrals.slice(0, 5).map(r => (
+              <div key={r.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div>
+                  <p className="text-xs text-gray-400 mb-0.5">{r.date}</p>
+                  <p className="text-sm text-gray-700">{r.receivingUnit || '（未填收案單位）'}</p>
+                  <p className="text-xs text-gray-400">{r.referralTypes.join('、')}</p>
+                </div>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${REFERRAL_TRACKING_COLORS[r.trackingStatus]}`}>
+                  {REFERRAL_TRACKING_LABELS[r.trackingStatus]}
+                </span>
+              </div>
+            ))}
+            {referrals.length > 5 && (
+              <p className="text-xs text-gray-400 text-center">還有 {referrals.length - 5} 筆...</p>
+            )}
+          </div>
+        )}
+        <Link
+          href={`/referral?caseId=${c.id}`}
+          className="inline-block mt-3 text-xs text-[#7a9985] hover:underline"
+        >
+          前往轉介追蹤頁面管理 →
+        </Link>
       </div>
 
       {/* Delete section */}

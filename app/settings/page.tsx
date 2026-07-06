@@ -72,6 +72,16 @@ export default function SettingsPage() {
             />
           </div>
           <div>
+            <label className="block text-sm font-medium text-gray-600 mb-1">單位聯絡信箱</label>
+            <input
+              type="text"
+              value={settings.organizationEmail}
+              onChange={e => updateSettings({ organizationEmail: e.target.value })}
+              placeholder="供轉介單匯出使用，選填"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
+            />
+          </div>
+          <div>
             <label className="block text-sm font-medium text-gray-600 mb-1">個管師姓名</label>
             <input
               type="text"

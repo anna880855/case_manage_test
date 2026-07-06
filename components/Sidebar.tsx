@@ -8,13 +8,14 @@ const NAV = [
   { href: '/', label: '個案列表', icon: '👥' },
   { href: '/phone-visit', label: '電訪產生', icon: '📞' },
   { href: '/home-visit', label: '家訪計劃', icon: '🏠' },
+  { href: '/referral', label: '轉介追蹤', icon: '📮' },
   { href: '/health-bureau-export', label: '衛生局報表', icon: '📤' },
   { href: '/settings', label: '設定', icon: '⚙️' },
 ]
 
 export default function Sidebar() {
   const pathname = usePathname()
-  const { cases, settings, setCases, setSentences, importHomeVisits } = useStore()
+  const { cases, settings, setCases, setSentences, importHomeVisits, importReferrals } = useStore()
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState('')
 
@@ -29,14 +30,19 @@ export default function Sidebar() {
     setSyncing(true)
     if (!silent) setSyncMsg('')
     try {
-      const params = new URLSearchParams({ url: settings.appsScriptUrl, homeVisitSheetName: settings.homeVisitSheetName || '家訪紀錄' })
+      const params = new URLSearchParams({
+        url: settings.appsScriptUrl,
+        homeVisitSheetName: settings.homeVisitSheetName || '家訪紀錄',
+        referralSheetName: settings.referralSheetName || '轉介紀錄',
+      })
       const res = await fetch(`/api/sync?${params}`)
       const data = await res.json()
       if (data.error) throw new Error(data.error)
       if (data.cases) setCases(data.cases)
       if (data.sentences) setSentences(data.sentences)
       if (data.homeVisits?.length) importHomeVisits(data.homeVisits)
-      setSyncMsg(`已同步 ${data.cases?.length || 0} 筆個案、${data.homeVisits?.length || 0} 筆家訪`)
+      if (data.referrals?.length) importReferrals(data.referrals)
+      setSyncMsg(`已同步 ${data.cases?.length || 0} 筆個案、${data.homeVisits?.length || 0} 筆家訪、${data.referrals?.length || 0} 筆轉介`)
     } catch (e: unknown) {
       if (!silent) setSyncMsg(e instanceof Error ? e.message : '同步失敗')
     } finally {
