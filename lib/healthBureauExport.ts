@@ -106,7 +106,8 @@ export function exportHealthBureauRowsXls(rows: string[][], fileName: string) {
   const sheet = XLSX.utils.aoa_to_sheet([HEADER, ...rows])
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, sheet, '工作表1')
-  XLSX.writeFile(workbook, fileName)
+  const bookType = fileName.toLowerCase().endsWith('.xls') ? 'xls' : 'xlsx'
+  XLSX.writeFile(workbook, fileName, { bookType })
 }
 
 export function exportHealthBureauXls(

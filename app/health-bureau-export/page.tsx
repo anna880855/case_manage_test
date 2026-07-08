@@ -71,7 +71,7 @@ export default function HealthBureauExportPage() {
   }).length
 
   const handleExport = () => {
-    exportHealthBureauRowsXls(mergedRows, `電訪紀錄_${month}.xlsx`)
+    exportHealthBureauRowsXls(mergedRows, `電訪紀錄_${month}.xls`)
   }
 
   if (!mounted) {
