@@ -142,6 +142,35 @@ export const EMPTY_REFERRAL_TRACKING = {
   trackingDate: '',
 }
 
+export type ProfessionalServiceStatus = 'active' | 'completed' | 'stopped'
+
+export interface ProfessionalServiceRecord {
+  id: string
+  caseId: string
+  caseName: string
+  serviceName: string // 服務項目（如：職能治療、物理治療、營養衛教…）
+  goal: string // 服務目標
+  startDate: string // 計劃期程起
+  endDate: string // 計劃期程迄
+  plannedSessions: number // 規劃次數
+  completedSessions: number // 已完成次數
+  status: ProfessionalServiceStatus
+  notes: string
+  createdAt: string
+}
+
+// 計算計劃期程進度（0~1），期程時間到達 2/3 時應提醒個管師注意
+export function getServicePeriodProgress(record: Pick<ProfessionalServiceRecord, 'startDate' | 'endDate'>): number | null {
+  if (!record.startDate || !record.endDate) return null
+  const start = new Date(record.startDate).getTime()
+  const end = new Date(record.endDate).getTime()
+  if (isNaN(start) || isNaN(end) || end <= start) return null
+  const now = Date.now()
+  return Math.min(1, Math.max(0, (now - start) / (end - start)))
+}
+
+export const SERVICE_PERIOD_REMINDER_THRESHOLD = 2 / 3
+
 export interface Settings {
   appsScriptUrl: string
   claudeApiKey: string
@@ -153,4 +182,5 @@ export interface Settings {
   phoneVisitSheetName: string
   homeVisitSheetName: string
   referralSheetName: string
+  professionalServiceSheetName: string
 }

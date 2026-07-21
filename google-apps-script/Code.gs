@@ -142,6 +142,15 @@ function doGet(e) {
       const fields = JSON.parse(e.parameter.fields || '{}');
       updateReferralTrackingRow(sheetName, id, fields);
       result = { updated: true };
+    } else if (action === 'getProfessionalServices') {
+      const sheetName = e.parameter.sheetName || '';
+      result = { professionalServices: getProfessionalServiceRows(sheetName) };
+    } else if (action === 'updateProfessionalService') {
+      const sheetName = e.parameter.sheetName || '';
+      const id = e.parameter.id || '';
+      const fields = JSON.parse(e.parameter.fields || '{}');
+      updateProfessionalServiceRow(sheetName, id, fields);
+      result = { updated: true };
     } else if (action === 'getDrafts') {
       const caseNumber = e.parameter.caseNumber || '';
       result = { drafts: getDrafts(caseNumber) };
@@ -340,6 +349,14 @@ const REFERRAL_HEADERS = [
 const REFERRAL_TRACKING_LABEL = { pending: '待回覆', accepted: '已提供服務', declined: '無法提供服務' };
 const REFERRAL_TRACKING_REVERSE = { '待回覆': 'pending', '已提供服務': 'accepted', '無法提供服務': 'declined' };
 
+const PROFESSIONAL_SERVICE_HEADERS = [
+  '個案姓名', '個案編號', '身分證字號', '服務項目', '服務目標',
+  '期程起', '期程迄', '規劃次數', '已完成次數', '狀態', '備註', '建立時間', '本機ID',
+];
+
+const PROFESSIONAL_SERVICE_STATUS_LABEL = { active: '進行中', completed: '已完成', stopped: '已中止' };
+const PROFESSIONAL_SERVICE_STATUS_REVERSE = { '進行中': 'active', '已完成': 'completed', '已中止': 'stopped' };
+
 function getOrCreateVisitSheet(sheetName, headers) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(sheetName);
@@ -408,6 +425,19 @@ function appendVisitRow(sheetName, record) {
       record.caseOverview || '', record.referralNeeds || '',
       record.managerName || '', REFERRAL_TRACKING_LABEL[record.trackingStatus] || REFERRAL_TRACKING_LABEL.pending,
       record.trackingNote || '', record.trackingDate || '', new Date(), record.id || '',
+    ]);
+    return;
+  }
+
+  if (record.kind === 'professionalService') {
+    const sheet = getOrCreateVisitSheet(sheetName, PROFESSIONAL_SERVICE_HEADERS);
+    sheet.appendRow([
+      record.caseName || '', record.caseNumber || '', record.idNumber || '',
+      record.serviceName || '', record.goal || '',
+      record.startDate || '', record.endDate || '',
+      record.plannedSessions || 0, record.completedSessions || 0,
+      PROFESSIONAL_SERVICE_STATUS_LABEL[record.status] || PROFESSIONAL_SERVICE_STATUS_LABEL.active,
+      record.notes || '', new Date(), record.id || '',
     ]);
     return;
   }
@@ -536,6 +566,52 @@ function updateReferralTrackingRow(sheetName, id, fields) {
     }
   }
   throw new Error('找不到對應的轉介紀錄');
+}
+
+// 讀回專業服務追蹤紀錄，重建為物件陣列，供跨裝置查看追蹤進度使用
+function getProfessionalServiceRows(sheetName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return [];
+  return data.slice(1)
+    .filter(function(row) { return String(row[12] || '').trim(); })
+    .map(function(row) {
+      return {
+        id: String(row[12] || ''),
+        caseId: String(row[1] || ''),
+        caseName: String(row[0] || ''),
+        serviceName: String(row[3] || ''),
+        goal: String(row[4] || ''),
+        startDate: toLocalDateStr(row[5]),
+        endDate: toLocalDateStr(row[6]),
+        plannedSessions: Number(row[7]) || 0,
+        completedSessions: Number(row[8]) || 0,
+        status: PROFESSIONAL_SERVICE_STATUS_REVERSE[String(row[9] || '')] || 'active',
+        notes: String(row[10] || ''),
+        createdAt: row[11] instanceof Date ? row[11].toISOString() : String(row[11] || ''),
+      };
+    });
+}
+
+// 依本機 ID 找到專業服務追蹤列，更新完成次數／狀態／備註
+function updateProfessionalServiceRow(sheetName, id, fields) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) throw new Error('找不到專業服務追蹤紀錄分頁：' + sheetName);
+  const data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][12] || '') === id) {
+      if (fields.completedSessions !== undefined) sheet.getRange(i + 1, 9).setValue(fields.completedSessions);
+      if (fields.status !== undefined) {
+        sheet.getRange(i + 1, 10).setValue(PROFESSIONAL_SERVICE_STATUS_LABEL[fields.status] || PROFESSIONAL_SERVICE_STATUS_LABEL.active);
+      }
+      if (fields.notes !== undefined) sheet.getRange(i + 1, 11).setValue(fields.notes);
+      return;
+    }
+  }
+  throw new Error('找不到對應的專業服務追蹤紀錄');
 }
 
 // ====================================================

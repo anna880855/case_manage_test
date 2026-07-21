@@ -3,6 +3,7 @@ import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { useStore } from '@/lib/store'
 import type { Case } from '@/lib/types'
+import { getServicePeriodProgress, SERVICE_PERIOD_REMINDER_THRESHOLD } from '@/lib/types'
 
 const STATUS_LABEL: Record<string, string> = {
   active: '在案',
@@ -293,7 +294,11 @@ function NewCaseModal({ onClose }: { onClose: () => void }) {
 }
 
 export default function HomePage() {
-  const { cases, phoneVisits, homeVisits, referrals, disabilityReminderDismissed, dismissDisabilityReminder } = useStore()
+  const {
+    cases, phoneVisits, homeVisits, referrals, professionalServices,
+    disabilityReminderDismissed, dismissDisabilityReminder,
+    serviceReminderDismissed, dismissServiceReminder,
+  } = useStore()
   const [mounted, setMounted] = useState(false)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('active')
@@ -345,6 +350,15 @@ export default function HomePage() {
     if (isWithinSixMonths(c.lastHomeVisitDate)) return false
     return !homeVisits.some(v => v.caseId === c.id && isWithinSixMonths(v.date))
   }), [activeCases, homeVisits, sixMonthsAgo])
+
+  const dueProfessionalServices = useMemo(() => {
+    return professionalServices.filter(r => {
+      if (r.status !== 'active') return false
+      if (serviceReminderDismissed[r.id]) return false
+      const progress = getServicePeriodProgress(r)
+      return progress !== null && progress >= SERVICE_PERIOD_REMINDER_THRESHOLD
+    })
+  }, [professionalServices, serviceReminderDismissed])
 
   const pendingReferrals = useMemo(() => referrals.filter(r => r.trackingStatus === 'pending'), [referrals])
   const pendingReferralCaseIds = useMemo(() => new Set(pendingReferrals.map(r => r.caseId)), [pendingReferrals])
@@ -461,6 +475,28 @@ export default function HomePage() {
                 </Link>
                 <button
                   onClick={() => dismissDisabilityReminder(c.id, reminderPeriodKey)}
+                  className="text-xs text-[#8a5a1f]/70 hover:text-[#8a5a1f] px-2 py-0.5 rounded border border-[#e8c79a] hover:bg-[#f5e2c2]"
+                >
+                  知道了
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {dueProfessionalServices.length > 0 && (
+        <div className="mb-4 bg-[#fdf2e3] border border-[#e8c79a] rounded-xl px-4 py-3">
+          <p className="text-sm font-medium text-[#8a5a1f] mb-2">⚠️ 專業服務計劃期程已達 2/3，請留意服務進度</p>
+          <div className="space-y-1.5">
+            {dueProfessionalServices.map(r => (
+              <div key={r.id} className="flex items-center justify-between text-sm">
+                <Link href={`/professional-service?caseId=${r.caseId}`} className="text-[#8a5a1f] hover:underline">
+                  {r.caseName}－{r.serviceName}（期程：{r.startDate} ～ {r.endDate}，已完成 {r.completedSessions}
+                  {r.plannedSessions ? `/${r.plannedSessions}` : ''} 次）
+                </Link>
+                <button
+                  onClick={() => dismissServiceReminder(r.id)}
                   className="text-xs text-[#8a5a1f]/70 hover:text-[#8a5a1f] px-2 py-0.5 rounded border border-[#e8c79a] hover:bg-[#f5e2c2]"
                 >
                   知道了
