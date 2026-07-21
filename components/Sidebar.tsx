@@ -18,6 +18,7 @@ export default function Sidebar() {
   const { cases, settings, setCases, setSentences, importHomeVisits, importReferrals } = useStore()
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState('')
+  const [collapsed, setCollapsed] = useState(false)
 
   const handleSync = async (silent = false) => {
     if (!settings.appsScriptUrl) {
@@ -54,12 +55,25 @@ export default function Sidebar() {
   const activeCases = cases.filter(c => c.status === 'active').length
 
   return (
-    <aside className="w-56 bg-[#50665b] text-white flex flex-col h-full flex-shrink-0">
-      <div className="p-5 border-b border-white/10">
-        <h1 className="text-base font-bold leading-tight">測試的個案管理系統</h1>
-        <p className="text-xs text-[#aec4b6] mt-1">
-          {activeCases > 0 ? `在案 ${activeCases} 位` : '尚無個案'}
-        </p>
+    <aside
+      className={`${collapsed ? 'w-14' : 'w-56'} bg-[#50665b] text-white flex flex-col h-full flex-shrink-0 transition-[width] duration-200`}
+    >
+      <div className={`border-b border-white/10 flex items-center ${collapsed ? 'justify-center p-3' : 'justify-between p-5'}`}>
+        {!collapsed && (
+          <div className="min-w-0">
+            <h1 className="text-base font-bold leading-tight">測試的個案管理系統</h1>
+            <p className="text-xs text-[#aec4b6] mt-1">
+              {activeCases > 0 ? `在案 ${activeCases} 位` : '尚無個案'}
+            </p>
+          </div>
+        )}
+        <button
+          onClick={() => setCollapsed(v => !v)}
+          title={collapsed ? '展開選單' : '收起選單'}
+          className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-white/80 transition-colors"
+        >
+          {collapsed ? '»' : '«'}
+        </button>
       </div>
 
       <nav className="flex-1 p-3 space-y-0.5">
@@ -67,14 +81,17 @@ export default function Sidebar() {
           <Link
             key={item.href}
             href={item.href}
+            title={collapsed ? item.label : undefined}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+              collapsed ? 'justify-center' : ''
+            } ${
               pathname === item.href
                 ? 'bg-white/20 font-semibold'
                 : 'hover:bg-white/10 text-white/80'
             }`}
           >
             <span className="text-base">{item.icon}</span>
-            {item.label}
+            {!collapsed && item.label}
           </Link>
         ))}
       </nav>
@@ -83,6 +100,7 @@ export default function Sidebar() {
         <button
           onClick={() => handleSync(false)}
           disabled={syncing}
+          title={collapsed ? '同步個案' : undefined}
           className="w-full flex items-center justify-center gap-2 py-2 bg-[#a3bcaa] hover:bg-[#b4c9bb] disabled:opacity-60 rounded-lg text-sm font-medium transition-colors"
         >
           {syncing ? (
@@ -91,14 +109,14 @@ export default function Sidebar() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              同步中...
+              {!collapsed && '同步中...'}
             </>
-          ) : '☁️ 同步個案'}
+          ) : (collapsed ? '☁️' : '☁️ 同步個案')}
         </button>
-        {syncMsg && (
+        {!collapsed && syncMsg && (
           <p className="text-xs text-center text-[#aec4b6] leading-tight">{syncMsg}</p>
         )}
-        {settings.managerName && (
+        {!collapsed && settings.managerName && (
           <p className="text-xs text-white/50 text-center">{settings.managerName}</p>
         )}
       </div>
