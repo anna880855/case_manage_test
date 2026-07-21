@@ -250,6 +250,7 @@ function HomeVisitContent() {
 
   // ── Problems
   const [selectedProblems, setSelectedProblems] = useState<string[]>([])
+  const [problemSearch, setProblemSearch] = useState('')
   const [rankedProblems, setRankedProblems] = useState<string[]>([])
   const [problemExplanations, setProblemExplanations] = useState('')
 
@@ -1505,8 +1506,15 @@ ${problemSection}
                   {/* Problem grid */}
                   <div>
                     <p className="text-xs text-gray-500 mb-2">選擇問題後，點選「加入排序」加入右側前五優先清單</p>
+                    <input
+                      type="text"
+                      value={problemSearch}
+                      onChange={e => setProblemSearch(e.target.value)}
+                      placeholder="搜尋問題關鍵字…"
+                      className="w-full mb-2 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
+                    />
                     <div className="grid grid-cols-2 gap-1.5">
-                      {PROBLEM_LIST.map(p => {
+                      {PROBLEM_LIST.filter(p => p.includes(problemSearch.trim())).map(p => {
                         const inRanked = rankedProblems.includes(p)
                         const selected2 = selectedProblems.includes(p)
                         return (
@@ -1545,6 +1553,9 @@ ${problemSection}
                         )
                       })}
                     </div>
+                    {PROBLEM_LIST.filter(p => p.includes(problemSearch.trim())).length === 0 && (
+                      <p className="text-xs text-gray-400 italic mt-2">找不到符合的問題</p>
+                    )}
                   </div>
 
                   {/* Ranked panel */}
