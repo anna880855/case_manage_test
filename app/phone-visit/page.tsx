@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import type { Case, Sentence, HealthBureauFields } from '@/lib/types'
-import { EMPTY_HEALTH_BUREAU_FIELDS } from '@/lib/types'
+import { EMPTY_HEALTH_BUREAU_FIELDS, formatDateOnly } from '@/lib/types'
 import { AI_STYLE_GUIDE } from '@/lib/aiStyle'
 import { splitContent } from '@/lib/healthBureauExport'
 
@@ -551,7 +551,7 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
                     {activeProfServices.map(r => (
                       <div key={r.id} className="text-xs bg-orange-100 text-orange-700 px-1.5 py-1 rounded-lg inline-block mr-1">
                         <span>{r.serviceName}（{r.completedSessions}/{r.plannedSessions}）</span>
-                        <span className="text-orange-700/70 ml-1">期程：{r.startDate} ～ {r.endDate}</span>
+                        <span className="text-orange-700/70 ml-1">期程：{formatDateOnly(r.startDate)} ～ {formatDateOnly(r.endDate)}</span>
                       </div>
                     ))}
                   </div>

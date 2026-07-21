@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import type { ProfessionalServiceRecord, ProfessionalServiceStatus } from '@/lib/types'
-import { getServicePeriodProgress, SERVICE_PERIOD_REMINDER_THRESHOLD } from '@/lib/types'
+import { getServicePeriodProgress, SERVICE_PERIOD_REMINDER_THRESHOLD, formatDateOnly } from '@/lib/types'
 
 const STATUS_LABELS: Record<ProfessionalServiceStatus, string> = {
   active: '進行中',
@@ -203,7 +203,7 @@ function ProfessionalServiceContent() {
                   onClick={() => handleSelectCase(r.caseId)}
                   className="text-[#8a5a1f] hover:underline text-left"
                 >
-                  {r.caseName}－{r.serviceName}（期程：{r.startDate} ～ {r.endDate}，已完成 {r.completedSessions}
+                  {r.caseName}－{r.serviceName}（期程：{formatDateOnly(r.startDate)} ～ {formatDateOnly(r.endDate)}，已完成 {r.completedSessions}
                   {r.plannedSessions ? `/${r.plannedSessions}` : ''} 次）
                 </button>
                 <button
@@ -282,7 +282,7 @@ function ProfessionalServiceContent() {
                           {STATUS_LABELS[r.status]}
                         </span>
                       </td>
-                      <td className="py-2 pr-3 text-gray-500 text-xs whitespace-nowrap">{r.startDate} ～ {r.endDate}</td>
+                      <td className="py-2 pr-3 text-gray-500 text-xs whitespace-nowrap">{formatDateOnly(r.startDate)} ～ {formatDateOnly(r.endDate)}</td>
                       <td className="py-2 pr-3 text-xs">
                         {progress === null ? (
                           <span className="text-gray-300">－</span>
@@ -488,7 +488,7 @@ function ServiceHistoryItem({ record, onChange, onDelete }: {
           {STATUS_LABELS[record.status]}
         </span>
       </div>
-      <p className="text-xs text-gray-400 mb-2">{record.startDate} ～ {record.endDate}</p>
+      <p className="text-xs text-gray-400 mb-2">{formatDateOnly(record.startDate)} ～ {formatDateOnly(record.endDate)}</p>
 
       {record.goal && <p className="text-xs text-gray-600 mb-2 whitespace-pre-wrap">🎯 {record.goal}</p>}
 
