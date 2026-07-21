@@ -25,13 +25,14 @@ const REFERRAL_TRACKING_COLORS: Record<string, string> = {
 
 export default function CaseDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
-  const { getCaseById, getPhoneVisitsByCase, getHomeVisitsByCase, getReferralsByCase, updateCaseStatus, updateCase, deleteCase, settings } = useStore()
+  const { getCaseById, getPhoneVisitsByCase, getHomeVisitsByCase, getReferralsByCase, getProfessionalServicesByCase, updateCaseStatus, updateCase, deleteCase, settings } = useStore()
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
   const c = getCaseById(params.id)
   const phoneVisits = getPhoneVisitsByCase(params.id)
   const homeVisits = getHomeVisitsByCase(params.id)
   const referrals = getReferralsByCase(params.id)
+  const professionalServices = getProfessionalServicesByCase(params.id)
   const [syncMsg, setSyncMsg] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -419,6 +420,12 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
         >
           📮 轉介個案
         </Link>
+        <Link
+          href={`/professional-service?caseId=${c.id}`}
+          className="flex-1 flex items-center justify-center gap-2 py-3 bg-white border-2 border-[#7a9985] text-[#7a9985] rounded-xl hover:bg-[#e6ede7] transition-colors font-medium"
+        >
+          🎯 專業服務追蹤
+        </Link>
       </div>
 
       <ServiceArrangementSection c={c} />
@@ -476,6 +483,43 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
           className="inline-block mt-3 text-xs text-[#7a9985] hover:underline"
         >
           前往轉介追蹤頁面管理 →
+        </Link>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-100 p-5 mb-6">
+        <h3 className="font-semibold text-gray-700 mb-3">
+          專業服務追蹤 <span className="text-gray-400 font-normal text-sm">({professionalServices.length})</span>
+        </h3>
+        {professionalServices.length === 0 ? (
+          <p className="text-sm text-gray-400">尚無專業服務追蹤紀錄</p>
+        ) : (
+          <div className="space-y-2">
+            {professionalServices.slice(0, 5).map(s => (
+              <div key={s.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div>
+                  <p className="text-xs text-gray-400 mb-0.5">{s.startDate} ～ {s.endDate}</p>
+                  <p className="text-sm text-gray-700">{s.serviceName}</p>
+                  <p className="text-xs text-gray-400">
+                    已完成 {s.completedSessions}{s.plannedSessions ? `/${s.plannedSessions}` : ''} 次
+                  </p>
+                </div>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
+                  s.status === 'active' ? 'bg-[#dce8de] text-[#607a68]' : s.status === 'stopped' ? 'bg-red-50 text-red-500' : 'bg-gray-100 text-gray-500'
+                }`}>
+                  {s.status === 'active' ? '進行中' : s.status === 'stopped' ? '已中止' : '已完成'}
+                </span>
+              </div>
+            ))}
+            {professionalServices.length > 5 && (
+              <p className="text-xs text-gray-400 text-center">還有 {professionalServices.length - 5} 筆...</p>
+            )}
+          </div>
+        )}
+        <Link
+          href={`/professional-service?caseId=${c.id}`}
+          className="inline-block mt-3 text-xs text-[#7a9985] hover:underline"
+        >
+          前往專業服務追蹤頁面管理 →
         </Link>
       </div>
 

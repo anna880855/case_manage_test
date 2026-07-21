@@ -9,6 +9,7 @@ const NAV = [
   { href: '/phone-visit', label: '電訪產生', icon: '📞' },
   { href: '/home-visit', label: '家訪計劃', icon: '🏠' },
   { href: '/referral', label: '轉介追蹤', icon: '📮' },
+  { href: '/professional-service', label: '專業服務追蹤', icon: '🎯' },
   { href: '/health-bureau-export', label: '衛生局報表', icon: '📤' },
   { href: '/settings', label: '設定', icon: '⚙️' },
 ]

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Case, PhoneVisitRecord, HomeVisitRecord, ReferralRecord, Sentence, Settings } from './types'
+import type { Case, PhoneVisitRecord, HomeVisitRecord, ReferralRecord, ProfessionalServiceRecord, Sentence, Settings } from './types'
 
 export const DEFAULT_SENTENCES: Sentence[] = [
   // ── service（服務使用，依長照服務大項目分類：居家照顧／日間照顧／交通車服務／喘息服務）──
@@ -73,9 +73,11 @@ interface StoreState {
   phoneVisits: PhoneVisitRecord[]
   homeVisits: HomeVisitRecord[]
   referrals: ReferralRecord[]
+  professionalServices: ProfessionalServiceRecord[]
   sentences: Sentence[]
   settings: Settings
   disabilityReminderDismissed: Record<string, string>
+  serviceReminderDismissed: Record<string, boolean>
 }
 
 interface StoreActions {
@@ -94,6 +96,11 @@ interface StoreActions {
   updateReferral: (id: string, fields: Partial<ReferralRecord>) => void
   deleteReferral: (id: string) => void
   importReferrals: (referrals: ReferralRecord[]) => void
+  addProfessionalService: (record: ProfessionalServiceRecord) => void
+  updateProfessionalService: (id: string, fields: Partial<ProfessionalServiceRecord>) => void
+  deleteProfessionalService: (id: string) => void
+  getProfessionalServicesByCase: (caseId: string) => ProfessionalServiceRecord[]
+  dismissServiceReminder: (id: string) => void
   addSentence: (sentence: Sentence) => void
   deleteSentence: (id: string) => void
   setSentences: (sentences: Sentence[]) => void
@@ -112,6 +119,7 @@ export const useStore = create<StoreState & StoreActions>()(
       phoneVisits: [],
       homeVisits: [],
       referrals: [],
+      professionalServices: [],
       sentences: DEFAULT_SENTENCES,
       settings: {
         appsScriptUrl: '',
@@ -126,6 +134,7 @@ export const useStore = create<StoreState & StoreActions>()(
         referralSheetName: '轉介紀錄',
       },
       disabilityReminderDismissed: {},
+      serviceReminderDismissed: {},
 
       setCases: (cases) => set({ cases }),
 
@@ -148,6 +157,7 @@ export const useStore = create<StoreState & StoreActions>()(
           phoneVisits: state.phoneVisits.filter((v) => v.caseId !== id),
           homeVisits: state.homeVisits.filter((v) => v.caseId !== id),
           referrals: state.referrals.filter((r) => r.caseId !== id),
+          professionalServices: state.professionalServices.filter((s) => s.caseId !== id),
         })),
 
       addPhoneVisit: (visit) =>
@@ -198,6 +208,25 @@ export const useStore = create<StoreState & StoreActions>()(
           return { referrals: [...toAdd, ...state.referrals] }
         }),
 
+      addProfessionalService: (record) =>
+        set((state) => ({ professionalServices: [record, ...state.professionalServices] })),
+
+      updateProfessionalService: (id, fields) =>
+        set((state) => ({
+          professionalServices: state.professionalServices.map((s) => s.id === id ? { ...s, ...fields } : s),
+        })),
+
+      deleteProfessionalService: (id) =>
+        set((state) => ({ professionalServices: state.professionalServices.filter((s) => s.id !== id) })),
+
+      getProfessionalServicesByCase: (caseId) =>
+        get().professionalServices.filter((s) => s.caseId === caseId),
+
+      dismissServiceReminder: (id) =>
+        set((state) => ({
+          serviceReminderDismissed: { ...state.serviceReminderDismissed, [id]: true },
+        })),
+
       addSentence: (sentence) =>
         set((state) => ({ sentences: [...state.sentences, sentence] })),
 
@@ -227,7 +256,7 @@ export const useStore = create<StoreState & StoreActions>()(
     }),
     {
       name: 'case-mgmt-v1',
-      version: 10,
+      version: 11,
       migrate: (persistedState: unknown, version: number) => {
         let state = persistedState as StoreState & StoreActions
         if (version < 2) {
@@ -285,6 +314,13 @@ export const useStore = create<StoreState & StoreActions>()(
           if (!s.organizationEmail) s.organizationEmail = ''
           if (!s.referralSheetName) s.referralSheetName = '轉介紀錄'
           state = { ...state, settings: s as unknown as Settings, referrals: state.referrals || [] }
+        }
+        if (version < 11) {
+          state = {
+            ...state,
+            professionalServices: state.professionalServices || [],
+            serviceReminderDismissed: state.serviceReminderDismissed || {},
+          }
         }
         return state
       },
