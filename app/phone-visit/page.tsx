@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import type { Case, Sentence, HealthBureauFields } from '@/lib/types'
-import { EMPTY_HEALTH_BUREAU_FIELDS } from '@/lib/types'
+import { EMPTY_HEALTH_BUREAU_FIELDS, formatDateOnly } from '@/lib/types'
 import { AI_STYLE_GUIDE } from '@/lib/aiStyle'
 import { splitContent } from '@/lib/healthBureauExport'
 
@@ -128,7 +128,7 @@ function targetFromContent(content: string): string {
 
 function PhoneVisitContent() {
   const searchParams = useSearchParams()
-  const { cases, sentences, settings, addPhoneVisit, getPhoneVisitsByCase, updateCase } = useStore()
+  const { cases, sentences, settings, addPhoneVisit, getPhoneVisitsByCase, updateCase, getProfessionalServicesByCase } = useStore()
 
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
@@ -200,6 +200,9 @@ function PhoneVisitContent() {
 
   const selectedCase = cases.find(c => c.id === selectedCaseId)
   const recentVisits = selectedCaseId ? getPhoneVisitsByCase(selectedCaseId).slice(0, 2) : []
+  const activeProfServices = selectedCaseId
+    ? getProfessionalServicesByCase(selectedCaseId).filter(r => r.status === 'active')
+    : []
 
   const filteredCases = useMemo(() => {
     const q = caseSearch.trim().toLowerCase()
@@ -479,7 +482,15 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
                       : 'hover:bg-gray-50 text-gray-700'
                   }`}
                 >
-                  <div className="font-medium">{c.name}</div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium">{c.name}</span>
+                    {getProfessionalServicesByCase(c.id).some(r => r.status === 'active') && (
+                      <span
+                        title="使用中的專業服務"
+                        className="w-1.5 h-1.5 rounded-full bg-orange-400 flex-shrink-0"
+                      />
+                    )}
+                  </div>
                   {c.caseNumber && <div className="text-xs text-gray-400">{c.caseNumber}</div>}
                 </button>
               ))}
@@ -531,6 +542,19 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
                   {selectedCase.services.map((s, i) => (
                     <span key={i} className="text-xs bg-white/60 text-[#7a9985] px-1.5 py-0.5 rounded-full">{s}</span>
                   ))}
+                </div>
+              )}
+              {activeProfServices.length > 0 && (
+                <div className="mt-1.5">
+                  <p className="text-xs text-[#7a9985]/70">使用中的專業服務：</p>
+                  <div className="mt-1 space-y-1">
+                    {activeProfServices.map(r => (
+                      <div key={r.id} className="text-xs bg-orange-100 text-orange-700 px-1.5 py-1 rounded-lg inline-block mr-1">
+                        <span>{r.serviceName}（{r.completedSessions}/{r.plannedSessions}）</span>
+                        <span className="text-orange-700/70 ml-1">期程：{formatDateOnly(r.startDate)} ～ {formatDateOnly(r.endDate)}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
               {recentVisits.length > 0 && (

@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import type { ProfessionalServiceRecord, ProfessionalServiceStatus } from '@/lib/types'
-import { getServicePeriodProgress, SERVICE_PERIOD_REMINDER_THRESHOLD } from '@/lib/types'
+import { getServicePeriodProgress, SERVICE_PERIOD_REMINDER_THRESHOLD, formatDateOnly } from '@/lib/types'
 
 const STATUS_LABELS: Record<ProfessionalServiceStatus, string> = {
   active: '進行中',
@@ -77,6 +77,17 @@ function ProfessionalServiceContent() {
   }
 
   const records = selectedCaseId ? getProfessionalServicesByCase(selectedCaseId) : []
+
+  // ── 全部個案服務清單
+  const [listStatusFilter, setListStatusFilter] = useState<ProfessionalServiceStatus | 'all'>('active')
+  const [listSearch, setListSearch] = useState('')
+  const allServiceRows = useMemo(() => {
+    const q = listSearch.trim().toLowerCase()
+    return professionalServices
+      .filter(r => listStatusFilter === 'all' || r.status === listStatusFilter)
+      .filter(r => !q || r.caseName.toLowerCase().includes(q) || r.serviceName.toLowerCase().includes(q))
+      .sort((a, b) => a.caseName.localeCompare(b.caseName, 'zh-Hant'))
+  }, [professionalServices, listStatusFilter, listSearch])
 
   // 期程進度達 2/3 且尚未結案的提醒
   const dueReminders = useMemo(() => {
@@ -192,7 +203,7 @@ function ProfessionalServiceContent() {
                   onClick={() => handleSelectCase(r.caseId)}
                   className="text-[#8a5a1f] hover:underline text-left"
                 >
-                  {r.caseName}－{r.serviceName}（期程：{r.startDate} ～ {r.endDate}，已完成 {r.completedSessions}
+                  {r.caseName}－{r.serviceName}（期程：{formatDateOnly(r.startDate)} ～ {formatDateOnly(r.endDate)}，已完成 {r.completedSessions}
                   {r.plannedSessions ? `/${r.plannedSessions}` : ''} 次）
                 </button>
                 <button
@@ -206,6 +217,92 @@ function ProfessionalServiceContent() {
           </div>
         </div>
       )}
+
+      <div className="bg-white rounded-xl border border-gray-100 p-4 mb-6">
+        <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+          <h3 className="font-semibold text-gray-700">全部個案服務清單</h3>
+          <div className="flex items-center gap-2 flex-wrap">
+            <input
+              type="text"
+              value={listSearch}
+              onChange={e => setListSearch(e.target.value)}
+              placeholder="搜尋個案 / 服務項目…"
+              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
+            />
+            <div className="flex gap-1">
+              {(['all', ...STATUS_ORDER] as const).map(s => (
+                <button
+                  key={s}
+                  onClick={() => setListStatusFilter(s)}
+                  className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${
+                    listStatusFilter === s
+                      ? 'bg-[#7a9985] text-white border-[#7a9985]'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-[#a3bcaa]'
+                  }`}
+                >
+                  {s === 'all' ? '全部' : STATUS_LABELS[s]}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {allServiceRows.length === 0 ? (
+          <p className="text-sm text-gray-400 py-4 text-center">沒有符合條件的服務紀錄</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-gray-400 border-b border-gray-100">
+                  <th className="py-2 pr-3 font-medium">個案</th>
+                  <th className="py-2 pr-3 font-medium">服務項目</th>
+                  <th className="py-2 pr-3 font-medium">狀態</th>
+                  <th className="py-2 pr-3 font-medium">計劃期程</th>
+                  <th className="py-2 pr-3 font-medium">期程進度</th>
+                  <th className="py-2 pr-3 font-medium">完成次數</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allServiceRows.map(r => {
+                  const progress = getServicePeriodProgress(r)
+                  const isDue = r.status === 'active' && progress !== null && progress >= SERVICE_PERIOD_REMINDER_THRESHOLD
+                  return (
+                    <tr key={r.id} className="border-b border-gray-50 last:border-0">
+                      <td className="py-2 pr-3">
+                        <button
+                          onClick={() => handleSelectCase(r.caseId)}
+                          className="text-[#7a9985] hover:underline font-medium text-left"
+                        >
+                          {r.caseName}
+                        </button>
+                      </td>
+                      <td className="py-2 pr-3 text-gray-700">{r.serviceName}</td>
+                      <td className="py-2 pr-3">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[r.status]}`}>
+                          {STATUS_LABELS[r.status]}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-3 text-gray-500 text-xs whitespace-nowrap">{formatDateOnly(r.startDate)} ～ {formatDateOnly(r.endDate)}</td>
+                      <td className="py-2 pr-3 text-xs">
+                        {progress === null ? (
+                          <span className="text-gray-300">－</span>
+                        ) : (
+                          <span className={isDue ? 'text-[#8a5a1f] font-medium' : 'text-gray-500'}>
+                            {Math.round(progress * 100)}%{isDue ? ' ⚠' : ''}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2 pr-3 text-gray-500 text-xs whitespace-nowrap">
+                        {r.completedSessions}{r.plannedSessions ? ` / ${r.plannedSessions}` : ''}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-[280px,1fr] gap-6">
         {/* ── 左側 ── */}
@@ -391,7 +488,7 @@ function ServiceHistoryItem({ record, onChange, onDelete }: {
           {STATUS_LABELS[record.status]}
         </span>
       </div>
-      <p className="text-xs text-gray-400 mb-2">{record.startDate} ～ {record.endDate}</p>
+      <p className="text-xs text-gray-400 mb-2">{formatDateOnly(record.startDate)} ～ {formatDateOnly(record.endDate)}</p>
 
       {record.goal && <p className="text-xs text-gray-600 mb-2 whitespace-pre-wrap">🎯 {record.goal}</p>}
 

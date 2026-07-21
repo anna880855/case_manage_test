@@ -171,6 +171,22 @@ export function getServicePeriodProgress(record: Pick<ProfessionalServiceRecord,
 
 export const SERVICE_PERIOD_REMINDER_THRESHOLD = 2 / 3
 
+// 統一將日期字串顯示為 yyyy-mm-dd，無法解析時原樣回傳
+export function formatDateOnly(value: string): string {
+  if (!value) return ''
+  const match = value.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/)
+  if (match) {
+    const [, y, m, d] = match
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+  }
+  const parsed = new Date(value)
+  if (isNaN(parsed.getTime())) return value
+  const y = parsed.getFullYear()
+  const m = String(parsed.getMonth() + 1).padStart(2, '0')
+  const d = String(parsed.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 export interface Settings {
   appsScriptUrl: string
   claudeApiKey: string
