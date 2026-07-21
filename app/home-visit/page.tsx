@@ -250,6 +250,7 @@ function HomeVisitContent() {
 
   // ── Problems
   const [selectedProblems, setSelectedProblems] = useState<string[]>([])
+  const [problemSearch, setProblemSearch] = useState('')
   const [rankedProblems, setRankedProblems] = useState<string[]>([])
   const [problemExplanations, setProblemExplanations] = useState('')
 
@@ -651,7 +652,7 @@ ${AI_STYLE_GUIDE}
         ? services.map(s => `${s.code}[${s.name}] ${s.units}單位/月`).join('；') || '（尚未填寫）'
         : '暫無需求'
       const transportDetail = transportEnabled
-        ? `${transportation}，至${transportHospital || '醫療院所'}`
+        ? `DA01[交通接送]*${transportation}，至${transportHospital || '醫療院所'}`
         : '暫無需求'
       const respiteText = respiteEnabled && respiteItems.length > 0
         ? `本案喘息額度自${respiteStartYear}年${respiteStartMonth}月至${respiteEndYear}年${respiteEndMonth}月，截至${respiteAsOfMonth}月尚餘${respiteRemaining}元。${respiteItems.map(i => `${i.prefix || 'GA'}${i.code}[${i.name}]*${i.units}單位/年`).join('；')}`
@@ -875,7 +876,7 @@ ${problemSection}
       .join('；') || ''
 
     const transportText = transportEnabled
-      ? `${transportation}，至${transportHospital || '醫療院所'}`
+      ? `DA01[交通接送]*${transportation}，至${transportHospital || '醫療院所'}`
       : '暫無需求'
 
     const aidsText = aidsDetail
@@ -1505,8 +1506,15 @@ ${problemSection}
                   {/* Problem grid */}
                   <div>
                     <p className="text-xs text-gray-500 mb-2">選擇問題後，點選「加入排序」加入右側前五優先清單</p>
+                    <input
+                      type="text"
+                      value={problemSearch}
+                      onChange={e => setProblemSearch(e.target.value)}
+                      placeholder="搜尋問題關鍵字…"
+                      className="w-full mb-2 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
+                    />
                     <div className="grid grid-cols-2 gap-1.5">
-                      {PROBLEM_LIST.map(p => {
+                      {PROBLEM_LIST.filter(p => p.includes(problemSearch.trim())).map(p => {
                         const inRanked = rankedProblems.includes(p)
                         const selected2 = selectedProblems.includes(p)
                         return (
@@ -1545,6 +1553,9 @@ ${problemSection}
                         )
                       })}
                     </div>
+                    {PROBLEM_LIST.filter(p => p.includes(problemSearch.trim())).length === 0 && (
+                      <p className="text-xs text-gray-400 italic mt-2">找不到符合的問題</p>
+                    )}
                   </div>
 
                   {/* Ranked panel */}
