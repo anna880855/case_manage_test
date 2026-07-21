@@ -21,6 +21,7 @@ function ProfessionalServiceContent() {
   const searchParams = useSearchParams()
   const {
     cases,
+    settings,
     professionalServices,
     serviceReminderDismissed,
     addProfessionalService,
@@ -56,6 +57,8 @@ function ProfessionalServiceContent() {
   const [plannedSessions, setPlannedSessions] = useState('')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
 
   const resetForm = () => {
     setServiceName('')
@@ -85,11 +88,13 @@ function ProfessionalServiceContent() {
     })
   }, [professionalServices, serviceReminderDismissed])
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!selectedCase) { setError('請選擇個案'); return }
     if (!serviceName.trim()) { setError('請填寫服務項目'); return }
     if (!startDate || !endDate) { setError('請填寫計劃期程起訖日期'); return }
     if (endDate < startDate) { setError('結束日期不可早於起始日期'); return }
+    setSaving(true)
+    setError('')
     const record: ProfessionalServiceRecord = {
       id: Date.now().toString(),
       caseId: selectedCase.id,
@@ -105,11 +110,69 @@ function ProfessionalServiceContent() {
       createdAt: new Date().toISOString(),
     }
     addProfessionalService(record)
+    if (settings.appsScriptUrl) {
+      try {
+        const res = await fetch('/api/update-case', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            appsScriptUrl: settings.appsScriptUrl,
+            action: 'appendVisit',
+            sheetName: settings.professionalServiceSheetName || '專業服務追蹤紀錄',
+            record: {
+              kind: 'professionalService',
+              id: record.id,
+              caseName: selectedCase.name,
+              caseNumber: selectedCase.caseNumber,
+              idNumber: selectedCase.idNumber,
+              serviceName: record.serviceName,
+              goal: record.goal,
+              startDate: record.startDate,
+              endDate: record.endDate,
+              plannedSessions: record.plannedSessions,
+              completedSessions: record.completedSessions,
+              status: record.status,
+              notes: record.notes,
+            },
+          }),
+        })
+        const data = await res.json()
+        if (!data.synced) {
+          setError(`已儲存在本機，但雲端同步失敗${data.error ? '：' + data.error : ''}。換電腦前請確認此筆紀錄已同步。`)
+        }
+      } catch {
+        setError('已儲存在本機，但雲端同步失敗（網路錯誤）。')
+      }
+    } else {
+      setError('尚未設定 Apps Script URL，此筆紀錄只存在本機瀏覽器，換電腦將無法看到。')
+    }
+    setSaving(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 3000)
     resetForm()
   }
 
+  const handleFieldChange = async (record: ProfessionalServiceRecord, fields: Partial<ProfessionalServiceRecord>) => {
+    updateProfessionalService(record.id, fields)
+    if (settings.appsScriptUrl) {
+      try {
+        await fetch('/api/update-case', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            appsScriptUrl: settings.appsScriptUrl,
+            action: 'updateProfessionalService',
+            sheetName: settings.professionalServiceSheetName || '專業服務追蹤紀錄',
+            id: record.id,
+            fields,
+          }),
+        })
+      } catch {}
+    }
+  }
+
   const handleDelete = (id: string) => {
-    if (!confirm('確定要刪除這筆專業服務追蹤紀錄嗎？')) return
+    if (!confirm('確定要刪除這筆專業服務追蹤紀錄嗎？（僅刪除本機紀錄，雲端 Sheet 資料需自行至分頁刪除）')) return
     deleteProfessionalService(id)
   }
 
@@ -200,7 +263,7 @@ function ProfessionalServiceContent() {
                     <ServiceHistoryItem
                       key={r.id}
                       record={r}
-                      onChange={fields => updateProfessionalService(r.id, fields)}
+                      onChange={fields => handleFieldChange(r, fields)}
                       onDelete={() => handleDelete(r.id)}
                     />
                   ))}
@@ -293,9 +356,10 @@ function ProfessionalServiceContent() {
 
               <button
                 onClick={handleSave}
-                className="w-full py-3 bg-[#7a9985] text-white rounded-xl font-semibold hover:bg-[#50665b] transition-colors"
+                disabled={saving}
+                className="w-full py-3 bg-[#7a9985] text-white rounded-xl font-semibold hover:bg-[#50665b] disabled:opacity-50 transition-colors"
               >
-                新增追蹤紀錄
+                {saving ? '儲存中...' : saved ? '✓ 已儲存' : '新增追蹤紀錄'}
               </button>
             </>
           )}

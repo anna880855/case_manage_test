@@ -16,7 +16,7 @@ const NAV = [
 
 export default function Sidebar() {
   const pathname = usePathname()
-  const { cases, settings, setCases, setSentences, importHomeVisits, importReferrals } = useStore()
+  const { cases, settings, setCases, setSentences, importHomeVisits, importReferrals, importProfessionalServices } = useStore()
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState('')
   const [collapsed, setCollapsed] = useState(false)
@@ -36,6 +36,7 @@ export default function Sidebar() {
         url: settings.appsScriptUrl,
         homeVisitSheetName: settings.homeVisitSheetName || '家訪紀錄',
         referralSheetName: settings.referralSheetName || '轉介紀錄',
+        professionalServiceSheetName: settings.professionalServiceSheetName || '專業服務追蹤紀錄',
       })
       const res = await fetch(`/api/sync?${params}`)
       const data = await res.json()
@@ -44,7 +45,8 @@ export default function Sidebar() {
       if (data.sentences) setSentences(data.sentences)
       if (data.homeVisits?.length) importHomeVisits(data.homeVisits)
       if (data.referrals?.length) importReferrals(data.referrals)
-      setSyncMsg(`已同步 ${data.cases?.length || 0} 筆個案、${data.homeVisits?.length || 0} 筆家訪、${data.referrals?.length || 0} 筆轉介`)
+      if (data.professionalServices?.length) importProfessionalServices(data.professionalServices)
+      setSyncMsg(`已同步 ${data.cases?.length || 0} 筆個案、${data.homeVisits?.length || 0} 筆家訪、${data.referrals?.length || 0} 筆轉介、${data.professionalServices?.length || 0} 筆專業服務`)
     } catch (e: unknown) {
       if (!silent) setSyncMsg(e instanceof Error ? e.message : '同步失敗')
     } finally {

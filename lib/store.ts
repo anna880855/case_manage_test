@@ -100,6 +100,7 @@ interface StoreActions {
   updateProfessionalService: (id: string, fields: Partial<ProfessionalServiceRecord>) => void
   deleteProfessionalService: (id: string) => void
   getProfessionalServicesByCase: (caseId: string) => ProfessionalServiceRecord[]
+  importProfessionalServices: (records: ProfessionalServiceRecord[]) => void
   dismissServiceReminder: (id: string) => void
   addSentence: (sentence: Sentence) => void
   deleteSentence: (id: string) => void
@@ -132,6 +133,7 @@ export const useStore = create<StoreState & StoreActions>()(
         phoneVisitSheetName: '電訪紀錄',
         homeVisitSheetName: '家訪紀錄',
         referralSheetName: '轉介紀錄',
+        professionalServiceSheetName: '專業服務追蹤紀錄',
       },
       disabilityReminderDismissed: {},
       serviceReminderDismissed: {},
@@ -222,6 +224,13 @@ export const useStore = create<StoreState & StoreActions>()(
       getProfessionalServicesByCase: (caseId) =>
         get().professionalServices.filter((s) => s.caseId === caseId),
 
+      importProfessionalServices: (records) =>
+        set((state) => {
+          const existingIds = new Set(state.professionalServices.map((s) => s.id))
+          const toAdd = records.filter((s) => !existingIds.has(s.id))
+          return { professionalServices: [...toAdd, ...state.professionalServices] }
+        }),
+
       dismissServiceReminder: (id) =>
         set((state) => ({
           serviceReminderDismissed: { ...state.serviceReminderDismissed, [id]: true },
@@ -256,7 +265,7 @@ export const useStore = create<StoreState & StoreActions>()(
     }),
     {
       name: 'case-mgmt-v1',
-      version: 11,
+      version: 12,
       migrate: (persistedState: unknown, version: number) => {
         let state = persistedState as StoreState & StoreActions
         if (version < 2) {
@@ -321,6 +330,11 @@ export const useStore = create<StoreState & StoreActions>()(
             professionalServices: state.professionalServices || [],
             serviceReminderDismissed: state.serviceReminderDismissed || {},
           }
+        }
+        if (version < 12) {
+          const s = (state.settings || {}) as unknown as Record<string, unknown>
+          if (!s.professionalServiceSheetName) s.professionalServiceSheetName = '專業服務追蹤紀錄'
+          state = { ...state, settings: s as unknown as Settings }
         }
         return state
       },

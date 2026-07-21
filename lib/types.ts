@@ -182,4 +182,5 @@ export interface Settings {
   phoneVisitSheetName: string
   homeVisitSheetName: string
   referralSheetName: string
+  professionalServiceSheetName: string
 }
