@@ -547,11 +547,12 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
               {activeProfServices.length > 0 && (
                 <div className="mt-1.5">
                   <p className="text-xs text-[#7a9985]/70">使用中的專業服務：</p>
-                  <div className="mt-1 flex flex-wrap gap-1">
+                  <div className="mt-1 space-y-1">
                     {activeProfServices.map(r => (
-                      <span key={r.id} className="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full">
-                        {r.serviceName}（{r.completedSessions}/{r.plannedSessions}）
-                      </span>
+                      <div key={r.id} className="text-xs bg-orange-100 text-orange-700 px-1.5 py-1 rounded-lg inline-block mr-1">
+                        <span>{r.serviceName}（{r.completedSessions}/{r.plannedSessions}）</span>
+                        <span className="text-orange-700/70 ml-1">期程：{r.startDate} ～ {r.endDate}</span>
+                      </div>
                     ))}
                   </div>
                 </div>
