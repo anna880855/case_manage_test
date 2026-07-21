@@ -11,7 +11,7 @@ export const DISEASE_LIST = [
   { key: 'parkinsons', label: '帕金森氏症' },
   { key: 'stroke', label: '腦中風', extra: ['出血性', '阻塞性'] },
   { key: 'prostate', label: '攝護腺肥大', extra: ['有手術', '無手術'] },
-  { key: 'spine', label: '脊椎損傷', extra: ['椎間盤突出', '脊椎壓迫', '脊椎骨裂'] },
+  { key: 'spine', label: '脊椎損傷', extra: ['椎間盤突出', '脊椎壓迫', '脊椎骨裂', '有手術', '無手術'] },
   { key: 'hepatitis', label: '肝炎', extra: ['A型', 'B型', 'C型'] },
   { key: 'cataract', label: '白內障', extra: ['左眼', '右眼', '雙眼', '有手術', '無手術'] },
   { key: 'glaucoma', label: '青光眼', extra: ['左眼', '右眼', '雙眼'] },
