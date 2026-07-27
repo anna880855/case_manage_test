@@ -876,7 +876,7 @@ function VisitHistory({ title, visits }: { title: string; visits: { id: string; 
           {visits.slice(0, 5).map(v => (
             <div key={v.id} className="p-3 bg-gray-50 rounded-lg">
               <p className="text-xs text-gray-400 mb-0.5">{formatDateOnly(v.date)}</p>
-              <p className="text-sm text-gray-600 line-clamp-2">{v.preview}</p>
+              <p className="text-sm text-gray-600 whitespace-pre-wrap max-h-32 overflow-y-auto pr-1">{v.preview}</p>
             </div>
           ))}
           {visits.length > 5 && (
