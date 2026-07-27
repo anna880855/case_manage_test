@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import type { Case, ReferralRecord, ReferralTrackingStatus, Settings } from '@/lib/types'
-import { REFERRAL_TYPES, EMPTY_REFERRAL_TRACKING } from '@/lib/types'
+import { REFERRAL_TYPES, EMPTY_REFERRAL_TRACKING, formatDateOnly } from '@/lib/types'
 
 const TRACKING_LABELS: Record<ReferralTrackingStatus, string> = {
   pending: '待回覆',
@@ -461,7 +461,7 @@ function ReferralHistoryItem({ referral, onTrackingChange, onExport, onDelete }:
   return (
     <div className="border border-gray-100 rounded-lg p-3 bg-gray-50">
       <div className="flex items-center justify-between mb-1">
-        <p className="text-xs text-gray-500">{referral.date}</p>
+        <p className="text-xs text-gray-500">{formatDateOnly(referral.date)}</p>
         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${TRACKING_COLORS[referral.trackingStatus]}`}>
           {TRACKING_LABELS[referral.trackingStatus]}
         </span>

@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
-import type { Case } from '@/lib/types'
+import { formatDateOnly, type Case } from '@/lib/types'
 import { SERVICE_CATALOG, type ServiceCategory } from '@/app/home-visit/constants'
 
 const STATUS_OPTIONS: { value: Case['status']; label: string; color: string }[] = [
@@ -343,7 +343,7 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
               <dl className="space-y-2.5">
                 <InfoRow label="個案編號" value={c.caseNumber} />
                 <InfoRow label="性別" value={c.gender} />
-                <InfoRow label="生日" value={c.birthDate} />
+                <InfoRow label="生日" value={c.birthDate} isDate />
                 <InfoRow label="身分證" value={c.idNumber} />
                 <InfoRow label="電話" value={c.phone} />
                 <InfoRow label="地址" value={c.address} />
@@ -355,10 +355,10 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
               <h3 className="font-semibold text-gray-700 mb-4 pb-2 border-b border-gray-50">照顧資訊</h3>
               <dl className="space-y-2.5">
                 <InfoRow label="身障類別" value={c.disability} />
-                <InfoRow label="身障期限" value={c.disabilityExpiry} />
+                <InfoRow label="身障期限" value={c.disabilityExpiry} isDate />
                 <InfoRow label="主要照顧者" value={c.guardian} />
                 <InfoRow label="照顧者電話" value={c.guardianPhone} />
-                <InfoRow label="最近家訪日" value={c.lastHomeVisitDate} />
+                <InfoRow label="最近家訪日" value={c.lastHomeVisitDate} isDate />
               </dl>
               {c.services && c.services.length > 0 && (
                 <div className="mt-3 pt-3 border-t border-gray-50">
@@ -464,7 +464,7 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
             {referrals.slice(0, 5).map(r => (
               <div key={r.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <div>
-                  <p className="text-xs text-gray-400 mb-0.5">{r.date}</p>
+                  <p className="text-xs text-gray-400 mb-0.5">{formatDateOnly(r.date)}</p>
                   <p className="text-sm text-gray-700">{r.receivingUnit || '（未填收案單位）'}</p>
                   <p className="text-xs text-gray-400">{r.referralTypes.join('、')}</p>
                 </div>
@@ -853,12 +853,12 @@ function EditField({ label, value, onChange }: { label: string; value: string; o
   )
 }
 
-function InfoRow({ label, value }: { label: string; value?: string }) {
+function InfoRow({ label, value, isDate }: { label: string; value?: string; isDate?: boolean }) {
   if (!value) return null
   return (
     <div className="flex gap-2">
       <dt className="w-24 text-xs text-gray-400 pt-0.5 flex-shrink-0">{label}</dt>
-      <dd className="text-sm text-gray-700">{value}</dd>
+      <dd className="text-sm text-gray-700">{isDate ? formatDateOnly(value) : value}</dd>
     </div>
   )
 }
@@ -875,7 +875,7 @@ function VisitHistory({ title, visits }: { title: string; visits: { id: string; 
         <div className="space-y-2">
           {visits.slice(0, 5).map(v => (
             <div key={v.id} className="p-3 bg-gray-50 rounded-lg">
-              <p className="text-xs text-gray-400 mb-0.5">{v.date}</p>
+              <p className="text-xs text-gray-400 mb-0.5">{formatDateOnly(v.date)}</p>
               <p className="text-sm text-gray-600 line-clamp-2">{v.preview}</p>
             </div>
           ))}
