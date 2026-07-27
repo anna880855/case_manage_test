@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { useStore } from '@/lib/store'
 import type { Case } from '@/lib/types'
-import { getServicePeriodProgress, SERVICE_PERIOD_REMINDER_THRESHOLD } from '@/lib/types'
+import { getServicePeriodProgress, SERVICE_PERIOD_REMINDER_THRESHOLD, formatDateOnly } from '@/lib/types'
 
 const STATUS_LABEL: Record<string, string> = {
   active: '在案',
@@ -471,7 +471,7 @@ export default function HomePage() {
             {expiringDisabilityCases.map(c => (
               <div key={c.id} className="flex items-center justify-between text-sm">
                 <Link href={`/cases/${c.id}`} className="text-[#8a5a1f] hover:underline">
-                  {c.name}（編號 {c.caseNumber || '－'}）－ 到期日：{c.disabilityExpiry}
+                  {c.name}（編號 {c.caseNumber || '－'}）－ 到期日：{formatDateOnly(c.disabilityExpiry)}
                 </Link>
                 <button
                   onClick={() => dismissDisabilityReminder(c.id, reminderPeriodKey)}

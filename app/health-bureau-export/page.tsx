@@ -2,6 +2,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
 import { buildHealthBureauRows, exportHealthBureauRowsXls, mergeRemoteRows, rocDateToYearMonth } from '@/lib/healthBureauExport'
+import { formatDateOnly } from '@/lib/types'
 
 export default function HealthBureauExportPage() {
   const { cases, phoneVisits, settings } = useStore()
@@ -142,7 +143,7 @@ export default function HealthBureauExportPage() {
             <tbody>
               {visitsInMonth.map(v => (
                 <tr key={v.id} className="border-b border-gray-50">
-                  <td className="py-1.5 pr-4 text-gray-500">{v.date}</td>
+                  <td className="py-1.5 pr-4 text-gray-500">{formatDateOnly(v.date)}</td>
                   <td className="py-1.5 pr-4 text-gray-700">{v.caseName}</td>
                   <td className="py-1.5 text-gray-500">{v.target}</td>
                 </tr>

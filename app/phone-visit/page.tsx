@@ -558,7 +558,7 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
                 </div>
               )}
               {recentVisits.length > 0 && (
-                <p className="text-xs text-[#7a9985]/50 mt-1.5">上次電訪：{recentVisits[0].date}</p>
+                <p className="text-xs text-[#7a9985]/50 mt-1.5">上次電訪：{formatDateOnly(recentVisits[0].date)}</p>
               )}
             </div>
           )}

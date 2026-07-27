@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
+import { formatDateOnly } from '@/lib/types'
 import {
   DISEASE_LIST, RETURN_VISIT_METHODS, MEDICATION_STATUS_OPTIONS, MEDICATION_NOTES_OPTIONS,
   MEMORY_OPTIONS, COGNITION_OPTIONS, EMOTION_OPTIONS, CONSCIOUSNESS_OPTIONS,
@@ -1036,7 +1037,7 @@ ${problemSection}
                 <p className="text-xs text-[#7a9985]/70">照顧者：{selectedCase.guardian}</p>
               )}
               {recentVisits.length > 0 && (
-                <p className="text-xs text-[#7a9985]/50 mt-1.5">上次家訪：{recentVisits[0].date}</p>
+                <p className="text-xs text-[#7a9985]/50 mt-1.5">上次家訪：{formatDateOnly(recentVisits[0].date)}</p>
               )}
             </div>
           )}
