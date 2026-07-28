@@ -138,5 +138,5 @@ export function mergeRemoteRows(localRows: string[][], remoteRows: string[][]): 
   for (const row of remoteRows.map(r => r.slice(0, 25))) {
     merged.set(`${row[0]}|${row[1]}`, row)
   }
-  return [...merged.values()].sort((a, b) => a[1].localeCompare(b[1]))
+  return Array.from(merged.values()).sort((a, b) => a[1].localeCompare(b[1]))
 }
