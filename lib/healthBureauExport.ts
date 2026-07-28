@@ -128,11 +128,15 @@ export function rocDateToYearMonth(rocDate: string): string {
   return `${roc + 1911}-${mm}`
 }
 
-// 把每筆雲端列（25 欄衛生局格式 + 個案姓名）裁成 25 欄，並排除本機已有的紀錄（依身分證字號＋日期判斷）
+// 把每筆雲端列（25 欄衛生局格式 + 個案姓名）裁成 25 欄；同一筆紀錄（依身分證字號＋日期判斷）以雲端資料為準，
+// 因為使用者可能直接在 Google Sheet 上更正錯誤上傳的個案，本機快取的舊資料不應覆蓋雲端的修正內容
 export function mergeRemoteRows(localRows: string[][], remoteRows: string[][]): string[][] {
-  const localKeys = new Set(localRows.map(r => `${r[0]}|${r[1]}`))
-  const remoteOnly = remoteRows
-    .map(r => r.slice(0, 25))
-    .filter(r => !localKeys.has(`${r[0]}|${r[1]}`))
-  return [...localRows, ...remoteOnly].sort((a, b) => a[1].localeCompare(b[1]))
+  const merged = new Map<string, string[]>()
+  for (const row of localRows) {
+    merged.set(`${row[0]}|${row[1]}`, row)
+  }
+  for (const row of remoteRows.map(r => r.slice(0, 25))) {
+    merged.set(`${row[0]}|${row[1]}`, row)
+  }
+  return [...merged.values()].sort((a, b) => a[1].localeCompare(b[1]))
 }
