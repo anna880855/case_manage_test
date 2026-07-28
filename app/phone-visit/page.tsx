@@ -379,8 +379,28 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
     }
   }
 
+  const validateHb = (): string => {
+    const missing: string[] = []
+    if (!Object.entries(hb.serviceFocus).some(([k, v]) => k !== 'otherNote' && v === true)) {
+      missing.push('服務重點（至少勾選一項）')
+    }
+    if (!hb.serviceTarget.user && !hb.serviceTarget.caregiver) {
+      missing.push('服務對象（至少勾選一項）')
+    }
+    if (!hb.trackingAdaptation.trim()) missing.push('追蹤服務適應與介入情形')
+    if (!hb.goalAchievement.trim()) missing.push('各項服務目標及整體計畫目標達成情形')
+    if (!hb.planAppropriateness.trim()) missing.push('整體計畫的適切性及需求異動')
+    if (!hb.otherHandling.trim()) missing.push('其他處理事項')
+    return missing.length > 0 ? `請填寫以下必填項目：${missing.join('、')}` : ''
+  }
+
   const handleSave = async () => {
     if (!selectedCase || !generated) return
+    const missingMsg = validateHb()
+    if (missingMsg) {
+      setError(missingMsg)
+      return
+    }
     const visit = {
       id: Date.now().toString(),
       caseId: selectedCase.id,
@@ -748,7 +768,9 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
 
             <div className="space-y-3">
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-1">服務項目</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">
+                  服務項目<span className="font-normal text-gray-400 ml-1">（選填）</span>
+                </p>
                 <div className="flex flex-wrap gap-x-4 gap-y-1.5">
                   {([
                     ['adjustPlan', '調整照顧計畫【不涉及額度變更】'],
@@ -778,7 +800,9 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
               </div>
 
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-1">服務重點</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">
+                  服務重點<span className="font-normal text-red-400 ml-1">（必填，至少勾選一項）</span>
+                </p>
                 <div className="flex flex-wrap gap-x-4 gap-y-1.5">
                   {([
                     ['trackLinkage', '追蹤長照需要者與各項服務之連結情形'],
@@ -810,7 +834,9 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
               </div>
 
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-1">服務對象</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">
+                  服務對象<span className="font-normal text-red-400 ml-1">（必填，至少勾選一項）</span>
+                </p>
                 <div className="flex gap-4">
                   <label className="flex items-center gap-1.5 text-sm text-gray-600">
                     <input
@@ -843,6 +869,7 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
                   <div className="flex items-center justify-between mb-1">
                     <label className="block text-xs text-gray-500">
                       {label}
+                      <span className="text-red-400 ml-1">（必填）</span>
                       {key !== 'otherHandling' && <span className="text-gray-400">（由電訪內容自動帶入，可手動修改）</span>}
                     </label>
                     {key === 'planAppropriateness' && selectedCase && hb.planAppropriateness && hb.planAppropriateness !== (selectedCase.physicalStatus || '') && (
