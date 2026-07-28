@@ -16,26 +16,40 @@ export default function HealthBureauExportPage() {
   const [remoteError, setRemoteError] = useState('')
   const [loadingRemote, setLoadingRemote] = useState(false)
 
-  useEffect(() => {
-    if (!mounted || !settings.appsScriptUrl || !settings.phoneVisitSheetName) return
+  const fetchRemoteRows = async (): Promise<string[][]> => {
+    if (!settings.appsScriptUrl || !settings.phoneVisitSheetName) return []
     setLoadingRemote(true)
     setRemoteError('')
-    fetch('/api/update-case', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        appsScriptUrl: settings.appsScriptUrl,
-        action: 'getPhoneVisits',
-        sheetName: settings.phoneVisitSheetName,
-      }),
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.synced) setRemoteRows(data.rows || [])
-        else setRemoteError(`無法從雲端電訪分頁取得資料，目前只會顯示本機紀錄。${data.error ? `（${data.error}）` : ''}`)
+    try {
+      const res = await fetch('/api/update-case', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appsScriptUrl: settings.appsScriptUrl,
+          action: 'getPhoneVisits',
+          sheetName: settings.phoneVisitSheetName,
+        }),
       })
-      .catch(() => setRemoteError('無法從雲端電訪分頁取得資料，目前只會顯示本機紀錄。'))
-      .finally(() => setLoadingRemote(false))
+      const data = await res.json()
+      if (data.synced) {
+        const rows = data.rows || []
+        setRemoteRows(rows)
+        return rows
+      }
+      setRemoteError(`無法從雲端電訪分頁取得資料，目前只會顯示本機紀錄。${data.error ? `（${data.error}）` : ''}`)
+      return []
+    } catch {
+      setRemoteError('無法從雲端電訪分頁取得資料，目前只會顯示本機紀錄。')
+      return []
+    } finally {
+      setLoadingRemote(false)
+    }
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!mounted || !settings.appsScriptUrl || !settings.phoneVisitSheetName) return
+    fetchRemoteRows()
   }, [mounted, settings.appsScriptUrl, settings.phoneVisitSheetName])
 
   const visitsInMonth = useMemo(() => {
@@ -71,8 +85,11 @@ export default function HealthBureauExportPage() {
     return !c?.idNumber
   }).length
 
-  const handleExport = () => {
-    exportHealthBureauRowsXls(mergedRows, `電訪紀錄_${month}.xls`)
+  const handleExport = async () => {
+    const freshRemoteRows = await fetchRemoteRows()
+    const freshRemoteRowsInMonth = freshRemoteRows.filter(r => rocDateToYearMonth(r[1]) === month)
+    const freshMergedRows = mergeRemoteRows(localRows, freshRemoteRowsInMonth)
+    exportHealthBureauRowsXls(freshMergedRows, `電訪紀錄_${month}.xls`)
   }
 
   if (!mounted) {
@@ -120,13 +137,22 @@ export default function HealthBureauExportPage() {
           </div>
         )}
 
-        <button
-          onClick={handleExport}
-          disabled={mergedRows.length === 0}
-          className="px-5 py-2.5 bg-[#7a9985] text-white rounded-lg font-medium hover:bg-[#50665b] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          📤 下載本月電訪報表
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => fetchRemoteRows()}
+            disabled={loadingRemote || !settings.appsScriptUrl || !settings.phoneVisitSheetName}
+            className="px-4 py-2.5 border border-[#a3bcaa] text-[#7a9985] rounded-lg font-medium hover:bg-[#e6ede7] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {loadingRemote ? '同步中…' : '🔄 重新整理雲端資料'}
+          </button>
+          <button
+            onClick={handleExport}
+            disabled={loadingRemote || mergedRows.length === 0}
+            className="px-5 py-2.5 bg-[#7a9985] text-white rounded-lg font-medium hover:bg-[#50665b] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {loadingRemote ? '同步雲端資料中…' : '📤 下載本月電訪報表'}
+          </button>
+        </div>
       </div>
 
       {visitsInMonth.length > 0 && (
