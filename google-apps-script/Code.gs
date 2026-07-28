@@ -507,6 +507,17 @@ function getHomeVisitRows(sheetName) {
   });
 }
 
+// 把「服務日期」欄位（7碼民國日期）正規化：使用者手動編輯後 Google Sheets 常會把它
+// 自動存成日期型別或去掉開頭的 0，這裡一律轉回固定 7 碼字串，避免報表比對日期時抓不到該筆紀錄
+function normalizeRocDateCell(cell) {
+  if (cell instanceof Date) return toRocDate(cell);
+  const s = String(cell || '').trim();
+  if (/^\d+$/.test(s) && s.length > 0 && s.length < 7) {
+    return ('0000000' + s).slice(-7);
+  }
+  return s;
+}
+
 // 讀回電訪紀錄分頁（已是衛生局報表 25 欄格式 + 個案姓名），供換電腦時重建報表用
 function getPhoneVisitRows(sheetName) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -515,7 +526,10 @@ function getPhoneVisitRows(sheetName) {
   const data = sheet.getDataRange().getValues();
   if (data.length < 2) return [];
   return data.slice(1).map(function(row) {
-    return row.map(function(cell) { return cell instanceof Date ? '' : String(cell || ''); });
+    return row.map(function(cell, i) {
+      if (i === 1) return normalizeRocDateCell(cell);
+      return cell instanceof Date ? '' : String(cell || '');
+    });
   });
 }
 
