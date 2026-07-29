@@ -128,7 +128,7 @@ function targetFromContent(content: string): string {
 
 function PhoneVisitContent() {
   const searchParams = useSearchParams()
-  const { cases, sentences, settings, addPhoneVisit, getPhoneVisitsByCase, updateCase, getProfessionalServicesByCase } = useStore()
+  const { cases, phoneVisits, sentences, settings, addPhoneVisit, updatePhoneVisit, getPhoneVisitsByCase, updateCase, getProfessionalServicesByCase } = useStore()
 
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
@@ -151,6 +151,7 @@ function PhoneVisitContent() {
   const [goalTracking, setGoalTracking] = useState<Record<GoalKey, { status: string; percent: string }>>({ ...EMPTY_GOAL_TRACKING })
   const goalLabels = GOAL_LABELS
   const [hb, setHb] = useState<HealthBureauFields>({ ...EMPTY_HEALTH_BUREAU_FIELDS })
+  const [editingVisitId, setEditingVisitId] = useState<string | undefined>(undefined)
 
   const pickRandom = (pool: Sentence[], exclude?: string) => {
     const others = exclude ? pool.filter(s => s.text !== exclude) : pool
@@ -271,6 +272,28 @@ function PhoneVisitContent() {
     setPlanBlock(content ? parsePlanBlock(content) : { ...PLAN_DEFAULTS })
     setGoalTracking(content ? parseGoalBlock(content) : { ...EMPTY_GOAL_TRACKING })
   }, [mounted, selectedCaseId, remoteCases])
+
+  // 衛生局一個月只能上傳一份紀錄：選定個案後，若本月已存過電訪紀錄，把已存內容帶入可編輯欄位，
+  // 讓個管師直接在原內容上補充後存檔（存檔時會覆蓋本月紀錄），本月尚無紀錄則維持空白。
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!mounted || !selectedCaseId) {
+      setEditingVisitId(undefined)
+      return
+    }
+    const yearMonth = date.slice(0, 7)
+    const monthlyVisit = getPhoneVisitsByCase(selectedCaseId)
+      .filter(v => v.date.slice(0, 7) === yearMonth)
+      .sort((a, b) => b.date.localeCompare(a.date))[0]
+    if (monthlyVisit) {
+      setEditingVisitId(monthlyVisit.id)
+      setTarget(monthlyVisit.target)
+      setGenerated(monthlyVisit.content)
+      setHb(monthlyVisit.healthBureau || { ...EMPTY_HEALTH_BUREAU_FIELDS })
+    } else {
+      setEditingVisitId(undefined)
+    }
+  }, [mounted, selectedCaseId, date, phoneVisits])
 
   const applyPrevPlanBlock = () => {
     if (!selectedCaseId) return
@@ -401,8 +424,9 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
       setError(missingMsg)
       return
     }
+    const visitId = editingVisitId || Date.now().toString()
     const visit = {
-      id: Date.now().toString(),
+      id: visitId,
       caseId: selectedCase.id,
       caseName: selectedCase.name,
       date: `${date} ${time}`,
@@ -410,7 +434,12 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
       content: generated,
       createdAt: new Date().toISOString(),
     }
-    addPhoneVisit({ ...visit, healthBureau: hb })
+    if (editingVisitId) {
+      updatePhoneVisit(editingVisitId, { ...visit, healthBureau: hb })
+    } else {
+      addPhoneVisit({ ...visit, healthBureau: hb })
+    }
+    setEditingVisitId(visitId)
     updateCase(selectedCase.id, { lastPhoneVisitDate: `${date} ${time}`, lastPhoneVisitContent: generated })
     setSaved(true)
     setError('')
@@ -550,6 +579,12 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
               />
             </div>
           </div>
+
+          {selectedCase && editingVisitId && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-amber-700 text-sm">
+              本月（{date.slice(0, 7)}）已建立過電訪紀錄，內容已帶入下方欄位，可直接補充後儲存，儲存時會覆蓋本月紀錄（衛生局一個月只接受一份）。
+            </div>
+          )}
 
           {selectedCase && (
             <div className="bg-[#e6ede7] rounded-xl p-4">
