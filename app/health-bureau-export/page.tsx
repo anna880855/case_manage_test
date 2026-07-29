@@ -89,7 +89,9 @@ export default function HealthBureauExportPage() {
     const freshRemoteRows = await fetchRemoteRows()
     const freshRemoteRowsInMonth = freshRemoteRows.filter(r => rocDateToYearMonth(r[1]) === month)
     const freshMergedRows = mergeRemoteRows(localRows, freshRemoteRowsInMonth)
-    exportHealthBureauRowsXls(freshMergedRows, `電訪紀錄_${month}.xls`)
+    // 匯出用 .xlsx 而非舊版 .xls：SheetJS 寫入舊版 .xls 二進位格式時，儲存格內容會被硬性截斷在 255 字元，
+    // 電訪內容常超過這個長度，用 .xls 會實際遺失資料；.xlsx 沒有這個限制。
+    exportHealthBureauRowsXls(freshMergedRows, `電訪紀錄_${month}.xlsx`)
   }
 
   if (!mounted) {
