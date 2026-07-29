@@ -1,7 +1,7 @@
 'use client'
 import { useMemo, useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
-import { buildHealthBureauRows, exportHealthBureauRowsXls, mergeRemoteRows, mergeVisitsForHealthBureau, rocDateToYearMonth } from '@/lib/healthBureauExport'
+import { buildHealthBureauRows, exportHealthBureauRowsXls, mergeRemoteRows, rocDateToYearMonth } from '@/lib/healthBureauExport'
 import { formatDateOnly } from '@/lib/types'
 
 export default function HealthBureauExportPage() {
@@ -89,80 +89,7 @@ export default function HealthBureauExportPage() {
     const freshRemoteRows = await fetchRemoteRows()
     const freshRemoteRowsInMonth = freshRemoteRows.filter(r => rocDateToYearMonth(r[1]) === month)
     const freshMergedRows = mergeRemoteRows(localRows, freshRemoteRowsInMonth)
-    // 本機備用匯出用 .xlsx：SheetJS 寫入舊版 .xls 二進位格式時，儲存格內容會被硬性截斷在 255 字元，
-    // 電訪內容常超過這個長度，用 .xls 會實際遺失資料；.xlsx 沒有這個限制，但衛生局系統只收 .xls，
-    // 正式上傳請用下面「從 Google 試算表匯出正式 .xls」，這個按鈕只供本機檢查內容用。
-    exportHealthBureauRowsXls(freshMergedRows, `電訪紀錄_${month}_本機檢查用.xlsx`)
-  }
-
-  const [preparingReport, setPreparingReport] = useState(false)
-  const [reportError, setReportError] = useState('')
-
-  // 衛生局系統只收 .xls，但前端用來寫 .xls 的函式庫會把內容截斷在 255 字元；改用 Google 試算表
-  // 原生的「下載為 .xls」匯出（沒有這個字數限制）。流程：先把本機才有、雲端這個月份還沒有的
-  // 紀錄同步上去，確保雲端資料完整，再請 Apps Script 把這個月已篩選合併好的紀錄複製到一個
-  // 獨立分頁，最後用 Google 官方匯出網址直接下載該分頁的 .xls。
-  const handleGoogleNativeExport = async () => {
-    if (!settings.appsScriptUrl || !settings.phoneVisitSheetName) return
-    setPreparingReport(true)
-    setReportError('')
-    try {
-      const freshRemoteRows = await fetchRemoteRows()
-      const freshRemoteRowsInMonth = freshRemoteRows.filter(r => rocDateToYearMonth(r[1]) === month)
-      const remoteIdNumbers = new Set(freshRemoteRowsInMonth.map(r => (r[0] || '').trim()))
-      const mergedVisits = mergeVisitsForHealthBureau(visitsInMonth)
-      for (const visit of mergedVisits) {
-        const c = cases.find(x => x.id === visit.caseId)
-        const idNumber = c?.idNumber?.trim()
-        if (!idNumber || remoteIdNumbers.has(idNumber)) continue
-        await fetch('/api/update-case', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            appsScriptUrl: settings.appsScriptUrl,
-            action: 'appendVisit',
-            sheetName: settings.phoneVisitSheetName,
-            record: {
-              kind: 'phone',
-              caseName: c?.name || visit.caseName,
-              caseNumber: c?.caseNumber || '',
-              idNumber,
-              date: visit.date,
-              target: visit.target,
-              content: visit.content,
-              healthBureau: visit.healthBureau,
-              managerIdNumber: settings.managerIdNumber,
-            },
-          }),
-        })
-      }
-
-      const res = await fetch('/api/update-case', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          appsScriptUrl: settings.appsScriptUrl,
-          action: 'prepareMonthlyReport',
-          sheetName: settings.phoneVisitSheetName,
-          yearMonth: month,
-        }),
-      })
-      const data = await res.json()
-      if (!data.synced || !data.prepared) {
-        setReportError(`準備報表失敗${data.error ? '：' + data.error : ''}，請確認 Google Apps Script 是否已更新部署。`)
-        return
-      }
-      const idMatch = String(data.spreadsheetUrl || '').match(/\/d\/([a-zA-Z0-9-_]+)/)
-      if (!idMatch) {
-        setReportError('無法取得試算表網址，請確認 Google Apps Script 是否已更新部署。')
-        return
-      }
-      window.open(`https://docs.google.com/spreadsheets/d/${idMatch[1]}/export?format=xls&gid=${data.sheetId}`, '_blank')
-    } catch {
-      setReportError('準備報表失敗（網路錯誤）')
-    } finally {
-      setPreparingReport(false)
-    }
+    exportHealthBureauRowsXls(freshMergedRows, `電訪紀錄_${month}.xls`)
   }
 
   if (!mounted) {
@@ -210,11 +137,7 @@ export default function HealthBureauExportPage() {
           </div>
         )}
 
-        {reportError && (
-          <div className="bg-red-50 border border-red-100 rounded-lg px-4 py-3 text-red-600 text-sm">{reportError}</div>
-        )}
-
-        <div className="flex gap-3 flex-wrap">
+        <div className="flex gap-3">
           <button
             onClick={() => fetchRemoteRows()}
             disabled={loadingRemote || !settings.appsScriptUrl || !settings.phoneVisitSheetName}
@@ -223,27 +146,13 @@ export default function HealthBureauExportPage() {
             {loadingRemote ? '同步中…' : '🔄 重新整理雲端資料'}
           </button>
           <button
-            onClick={handleGoogleNativeExport}
-            disabled={preparingReport || loadingRemote || !settings.appsScriptUrl || !settings.phoneVisitSheetName || mergedRows.length === 0}
-            className="px-5 py-2.5 bg-[#7a9985] text-white rounded-lg font-medium hover:bg-[#50665b] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            {preparingReport ? '準備報表中…' : '📥 從 Google 試算表匯出正式 .xls（衛生局上傳用）'}
-          </button>
-          <button
             onClick={handleExport}
             disabled={loadingRemote || mergedRows.length === 0}
-            className="px-4 py-2.5 border border-gray-200 text-gray-500 rounded-lg font-medium hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-sm"
+            className="px-5 py-2.5 bg-[#7a9985] text-white rounded-lg font-medium hover:bg-[#50665b] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            {loadingRemote ? '同步雲端資料中…' : '📤 下載本機 .xlsx（僅供檢查內容，不可上傳衛生局）'}
+            {loadingRemote ? '同步雲端資料中…' : '📤 下載本月電訪報表'}
           </button>
         </div>
-        {(!settings.appsScriptUrl || !settings.phoneVisitSheetName) && (
-          <p className="text-xs text-gray-400">
-            正式 .xls 匯出需要先在
-            <a href="/settings" className="underline font-medium mx-1">設定頁面</a>
-            設定 Apps Script URL 與電訪分頁名稱。
-          </p>
-        )}
       </div>
 
       {visitsInMonth.length > 0 && (

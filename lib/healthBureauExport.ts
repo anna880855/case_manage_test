@@ -175,7 +175,9 @@ export function exportHealthBureauRowsXls(rows: string[][], fileName: string) {
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, sheet, '工作表1')
   const bookType = fileName.toLowerCase().endsWith('.xls') ? 'xls' : 'xlsx'
-  XLSX.writeFile(workbook, fileName, { bookType })
+  // bookSST 讓 .xls 的文字內容走「共用字串表」寫入路徑，而不是預設會把每個儲存格截斷在 255 字元的路徑
+  // （截斷是 SheetJS 這個路徑本身的限制，共用字串表是 BIFF8 標準機制，兩者產生的都是合法 .xls 檔）
+  XLSX.writeFile(workbook, fileName, { bookType, bookSST: bookType === 'xls' })
 }
 
 export function exportHealthBureauXls(
