@@ -68,7 +68,7 @@ export function splitContent(content: string): { narrative: string; goalBlock: s
 export const HEALTH_BUREAU_MERGE_DIVIDER = '------------------------------'
 
 // 合併多筆同月紀錄的文字內容；完全相同的內容（例如都留預設值「無」）只保留一份，避免分隔線重複無意義的重複文字
-function joinWithDivider(parts: (string | undefined)[]): string {
+export function joinWithDivider(parts: (string | undefined)[]): string {
   const nonEmpty = parts.map(p => (p || '').trim()).filter(Boolean)
   const deduped = nonEmpty.filter((p, i) => nonEmpty.indexOf(p) === i)
   return deduped.join(`\n${HEALTH_BUREAU_MERGE_DIVIDER}\n`)

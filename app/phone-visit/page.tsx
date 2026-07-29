@@ -5,7 +5,7 @@ import { useStore } from '@/lib/store'
 import type { Case, Sentence, HealthBureauFields } from '@/lib/types'
 import { EMPTY_HEALTH_BUREAU_FIELDS, formatDateOnly } from '@/lib/types'
 import { AI_STYLE_GUIDE } from '@/lib/aiStyle'
-import { splitContent } from '@/lib/healthBureauExport'
+import { splitContent, joinWithDivider } from '@/lib/healthBureauExport'
 
 const CATEGORIES = ['service', 'physical', 'family', 'plan'] as const
 type PhoneCategory = typeof CATEGORIES[number]
@@ -152,6 +152,9 @@ function PhoneVisitContent() {
   const goalLabels = GOAL_LABELS
   const [hb, setHb] = useState<HealthBureauFields>({ ...EMPTY_HEALTH_BUREAU_FIELDS })
   const [editingVisitId, setEditingVisitId] = useState<string | undefined>(undefined)
+  // 本月已存過的紀錄內容（存檔前的基準版本），新產生的內容會疊加在這份基準之上，
+  // 而不是取代它，重新組合句型時才不會把已存過的內容洗掉
+  const [monthBaseline, setMonthBaseline] = useState<{ content: string; hb: HealthBureauFields } | null>(null)
 
   const pickRandom = (pool: Sentence[], exclude?: string) => {
     const others = exclude ? pool.filter(s => s.text !== exclude) : pool
@@ -279,6 +282,7 @@ function PhoneVisitContent() {
   useEffect(() => {
     if (!mounted || !selectedCaseId) {
       setEditingVisitId(undefined)
+      setMonthBaseline(null)
       return
     }
     const yearMonth = date.slice(0, 7)
@@ -286,12 +290,15 @@ function PhoneVisitContent() {
       .filter(v => v.date.slice(0, 7) === yearMonth)
       .sort((a, b) => b.date.localeCompare(a.date))[0]
     if (monthlyVisit) {
+      const baselineHb = monthlyVisit.healthBureau || { ...EMPTY_HEALTH_BUREAU_FIELDS }
       setEditingVisitId(monthlyVisit.id)
       setTarget(monthlyVisit.target)
       setGenerated(monthlyVisit.content)
-      setHb(monthlyVisit.healthBureau || { ...EMPTY_HEALTH_BUREAU_FIELDS })
+      setHb(baselineHb)
+      setMonthBaseline({ content: monthlyVisit.content, hb: baselineHb })
     } else {
       setEditingVisitId(undefined)
+      setMonthBaseline(null)
     }
   }, [mounted, selectedCaseId, date, phoneVisits])
 
@@ -329,13 +336,16 @@ function PhoneVisitContent() {
     return lines.join('\n')
   }
 
+  // 若本月已有存過的基準內容（monthBaseline），新產生的內容會疊加在基準之後（用分隔線串接），
+  // 而不是取代掉本月已存的內容，補記月中新增電訪時才不會把月初的紀錄洗掉
   const applyContentToHb = (content: string) => {
     const { narrative, goalBlock, planBlock } = splitContent(content)
+    const baselineHb = monthBaseline?.hb
     setHb(p => ({
       ...p,
-      trackingAdaptation: narrative,
-      goalAchievement: goalBlock,
-      planAppropriateness: planBlock,
+      trackingAdaptation: baselineHb ? joinWithDivider([baselineHb.trackingAdaptation, narrative]) : narrative,
+      goalAchievement: baselineHb ? joinWithDivider([baselineHb.goalAchievement, goalBlock]) : goalBlock,
+      planAppropriateness: baselineHb ? joinWithDivider([baselineHb.planAppropriateness, planBlock]) : planBlock,
       otherHandling: p.otherHandling || '無',
     }))
   }
@@ -362,7 +372,7 @@ ${PLAN_LABELS.aids}：${planBlock.aids}
 ${PLAN_LABELS.respite}：${planBlock.respite}
 ${PLAN_LABELS.referral}：${planBlock.referral}`)
     const result = parts.join('\n')
-    setGenerated(result)
+    setGenerated(monthBaseline ? joinWithDivider([monthBaseline.content, result]) : result)
     applyContentToHb(result)
     setSaved(false)
     setError('')
@@ -393,7 +403,7 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
       const finalContent = goalBlock && markerIndex !== -1
         ? `${data.content.slice(0, markerIndex).trimEnd()}\n\n\n${goalBlock}\n\n${data.content.slice(markerIndex)}`
         : data.content + (goalBlock ? `\n\n\n${goalBlock}` : '')
-      setGenerated(finalContent)
+      setGenerated(monthBaseline ? joinWithDivider([monthBaseline.content, finalContent]) : finalContent)
       applyContentToHb(finalContent)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '產生失敗，請再試一次')
@@ -440,6 +450,7 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
       addPhoneVisit({ ...visit, healthBureau: hb })
     }
     setEditingVisitId(visitId)
+    setMonthBaseline({ content: generated, hb })
     updateCase(selectedCase.id, { lastPhoneVisitDate: `${date} ${time}`, lastPhoneVisitContent: generated })
     setSaved(true)
     setError('')
