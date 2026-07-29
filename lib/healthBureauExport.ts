@@ -196,6 +196,38 @@ export function rocDateToYearMonth(rocDate: string): string {
   return `${roc + 1911}-${mm}`
 }
 
+// 把雲端試算表的一列（25 欄衛生局格式）還原成 HealthBureauFields，供「查詢本月紀錄」功能
+// 從雲端讀回勾選與文字內容時使用（跨裝置查詢時，本機瀏覽器不一定存有這筆紀錄的結構化資料）
+export function parseHealthBureauRow(row: string[]): HealthBureauFields {
+  const checked = (i: number) => row[i] === 'V'
+  return {
+    serviceItems: {
+      adjustPlan: checked(4),
+      consultComplaint: checked(5),
+      referral: checked(6),
+      other: checked(7),
+      otherNote: row[8] || '',
+    },
+    serviceFocus: {
+      trackLinkage: checked(9),
+      planDiscussion: checked(10),
+      resourceLink: checked(11),
+      consultComplaint: checked(12),
+      acceptComplaint: checked(13),
+      other: checked(14),
+      otherNote: row[15] || '',
+    },
+    serviceTarget: {
+      user: checked(16),
+      caregiver: checked(17),
+    },
+    trackingAdaptation: row[21] || '',
+    goalAchievement: row[22] || '',
+    planAppropriateness: row[23] || '',
+    otherHandling: row[24] || '無',
+  }
+}
+
 // 衛生局報表欄位中屬於勾選（V / 空白）與可合併文字的欄位索引，用來把同一身分證字號、
 // 同月份的多筆雲端列（例如合併功能上線前，同案已分次上傳的舊紀錄）合併成一筆
 const RAW_ROW_CHECKBOX_COLS = [2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 16, 17]
