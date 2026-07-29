@@ -139,13 +139,6 @@ export default function HealthBureauExportPage() {
 
         <div className="flex gap-3">
           <button
-            onClick={() => fetchRemoteRows()}
-            disabled={loadingRemote || !settings.appsScriptUrl || !settings.phoneVisitSheetName}
-            className="px-4 py-2.5 border border-[#a3bcaa] text-[#7a9985] rounded-lg font-medium hover:bg-[#e6ede7] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            {loadingRemote ? '同步中…' : '🔄 重新整理雲端資料'}
-          </button>
-          <button
             onClick={handleExport}
             disabled={loadingRemote || mergedRows.length === 0}
             className="px-5 py-2.5 bg-[#7a9985] text-white rounded-lg font-medium hover:bg-[#50665b] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
