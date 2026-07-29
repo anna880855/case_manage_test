@@ -29,6 +29,9 @@ export async function POST(req: NextRequest) {
     } else if (action === 'getPhoneVisits') {
       const { sheetName } = body
       params = { action: 'getPhoneVisits', sheetName }
+    } else if (action === 'prepareMonthlyReport') {
+      const { sheetName, yearMonth } = body
+      params = { action: 'prepareMonthlyReport', sheetName, yearMonth }
     } else if (action === 'getHomeVisits') {
       const { sheetName } = body
       params = { action: 'getHomeVisits', sheetName }
@@ -66,6 +69,10 @@ export async function POST(req: NextRequest) {
       visits: json.data?.visits,
       referrals: json.data?.referrals,
       professionalServices: json.data?.professionalServices,
+      prepared: json.data?.prepared,
+      rowCount: json.data?.rowCount,
+      spreadsheetUrl: json.data?.spreadsheetUrl,
+      sheetId: json.data?.sheetId,
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : '同步失敗'

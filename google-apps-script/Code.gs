@@ -130,6 +130,10 @@ function doGet(e) {
     } else if (action === 'getPhoneVisits') {
       const sheetName = e.parameter.sheetName || '';
       result = { rows: getPhoneVisitRows(sheetName) };
+    } else if (action === 'prepareMonthlyReport') {
+      const sheetName = e.parameter.sheetName || '';
+      const yearMonth = e.parameter.yearMonth || '';
+      result = prepareMonthlyReport(sheetName, yearMonth);
     } else if (action === 'getHomeVisits') {
       const sheetName = e.parameter.sheetName || '';
       result = { visits: getHomeVisitRows(sheetName) };
@@ -486,6 +490,90 @@ function rocYearMonth(rocDate) {
   var s = String(rocDate || '').trim();
   if (s.length < 5) return '';
   return s.slice(0, s.length - 4) + s.slice(-4, -2);
+}
+
+// 把西元「YYYY-MM」（<input type="month"> 的值）轉成跟 rocYearMonth() 同格式的民國年+月，供比對用
+function calendarToRocYearMonth(yearMonth) {
+  var parts = String(yearMonth || '').split('-');
+  if (parts.length !== 2) return '';
+  var y = parseInt(parts[0], 10) - 1911;
+  if (isNaN(y)) return '';
+  return '' + y + parts[1];
+}
+
+var HEALTH_BUREAU_MERGE_DIVIDER = '------------------------------';
+// 電訪紀錄 25 欄中屬於勾選（V / 空白）與可合併文字的欄位索引（0-based），跟 lib/healthBureauExport.ts 的
+// RAW_ROW_CHECKBOX_COLS / RAW_ROW_TEXT_JOIN_COLS 對應，供 prepareMonthlyReport 合併同身分證字號的舊資料
+var HB_CHECKBOX_COLS = [2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 16, 17];
+var HB_TEXT_JOIN_COLS = [8, 15, 21, 22, 23, 24];
+
+function joinWithDividerGs(parts) {
+  var nonEmpty = [];
+  parts.forEach(function(p) {
+    var t = String(p || '').trim();
+    if (t) nonEmpty.push(t);
+  });
+  var deduped = nonEmpty.filter(function(p, i) { return nonEmpty.indexOf(p) === i; });
+  return deduped.join('\n' + HEALTH_BUREAU_MERGE_DIVIDER + '\n');
+}
+
+// 依身分證字號合併同月份的多列（保險用：正常情況下 appendVisitRow 已經是覆蓋寫入，
+// 這裡是為了涵蓋合併功能上線前、同案同月已經分開存了好幾列的舊資料）
+function mergeHealthBureauRowsGs(rows) {
+  var order = [];
+  var groups = {};
+  rows.forEach(function(row) {
+    var id = String(row[0] || '').trim();
+    if (!groups[id]) { groups[id] = []; order.push(id); }
+    groups[id].push(row);
+  });
+  return order.map(function(id) {
+    var group = groups[id].slice().sort(function(a, b) { return String(a[1]).localeCompare(String(b[1])); });
+    if (group.length === 1) return group[0];
+    var merged = group[group.length - 1].slice();
+    HB_CHECKBOX_COLS.forEach(function(col) {
+      merged[col] = group.some(function(r) { return r[col] === 'V'; }) ? 'V' : '';
+    });
+    HB_TEXT_JOIN_COLS.forEach(function(col) {
+      merged[col] = joinWithDividerGs(group.map(function(r) { return r[col]; }));
+    });
+    return merged;
+  });
+}
+
+// 衛生局系統只收 .xls，但 SheetJS（前端用來產生 .xls 的免費函式庫）寫入舊版 .xls 格式時
+// 會把每個儲存格內容截斷在 255 字元，電訪內容常超過這個長度。改用這個方法：把當月已篩選、
+// 合併好的紀錄複製到一個獨立的分頁，再由 Google 試算表原生的「下載為 .xls」匯出，
+// 因為 Google 自己的匯出引擎沒有這個字數限制。
+function prepareMonthlyReport(sheetName, yearMonth) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sourceSheet = ss.getSheetByName(sheetName);
+  if (!sourceSheet) throw new Error('找不到電訪紀錄分頁：' + sheetName);
+
+  const recYearMonth = calendarToRocYearMonth(yearMonth);
+  const data = sourceSheet.getDataRange().getValues();
+  var rows = [];
+  for (var i = 1; i < data.length; i++) {
+    if (rocYearMonth(String(data[i][1] || '').trim()) !== recYearMonth) continue;
+    rows.push(data[i].slice(0, 25)); // 只取衛生局規定的 25 欄（A~Y），不含最後方便人工辨識用的「個案姓名」欄
+  }
+  rows = mergeHealthBureauRowsGs(rows);
+
+  const reportSheetName = '衛生局報表_' + yearMonth;
+  var reportSheet = ss.getSheetByName(reportSheetName);
+  if (reportSheet) ss.deleteSheet(reportSheet);
+  reportSheet = ss.insertSheet(reportSheetName);
+  reportSheet.getRange(1, 1, 1, 25).setValues([PHONE_VISIT_HEADERS.slice(0, 25)]);
+  if (rows.length > 0) {
+    reportSheet.getRange(2, 1, rows.length, 25).setValues(rows);
+  }
+
+  return {
+    prepared: true,
+    rowCount: rows.length,
+    spreadsheetUrl: ss.getUrl(),
+    sheetId: reportSheet.getSheetId(),
+  };
 }
 
 // 讀回家訪紀錄，重建為 HomeVisitRecord 物件陣列
