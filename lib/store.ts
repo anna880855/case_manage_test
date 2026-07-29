@@ -87,6 +87,7 @@ interface StoreActions {
   updateCase: (id: string, fields: Partial<Case>) => void
   deleteCase: (id: string) => void
   addPhoneVisit: (visit: PhoneVisitRecord) => void
+  updatePhoneVisit: (id: string, fields: Partial<PhoneVisitRecord>) => void
   deletePhoneVisit: (id: string) => void
   addHomeVisit: (visit: HomeVisitRecord) => void
   deleteHomeVisit: (id: string) => void
@@ -164,6 +165,11 @@ export const useStore = create<StoreState & StoreActions>()(
 
       addPhoneVisit: (visit) =>
         set((state) => ({ phoneVisits: [visit, ...state.phoneVisits] })),
+
+      updatePhoneVisit: (id, fields) =>
+        set((state) => ({
+          phoneVisits: state.phoneVisits.map((v) => v.id === id ? { ...v, ...fields } : v),
+        })),
 
       deletePhoneVisit: (id) =>
         set((state) => ({ phoneVisits: state.phoneVisits.filter((v) => v.id !== id) })),

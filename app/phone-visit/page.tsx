@@ -5,7 +5,7 @@ import { useStore } from '@/lib/store'
 import type { Case, Sentence, HealthBureauFields } from '@/lib/types'
 import { EMPTY_HEALTH_BUREAU_FIELDS, formatDateOnly } from '@/lib/types'
 import { AI_STYLE_GUIDE } from '@/lib/aiStyle'
-import { splitContent } from '@/lib/healthBureauExport'
+import { splitContent, joinWithDivider, parseHealthBureauRow, rocDateToYearMonth } from '@/lib/healthBureauExport'
 
 const CATEGORIES = ['service', 'physical', 'family', 'plan'] as const
 type PhoneCategory = typeof CATEGORIES[number]
@@ -128,7 +128,7 @@ function targetFromContent(content: string): string {
 
 function PhoneVisitContent() {
   const searchParams = useSearchParams()
-  const { cases, sentences, settings, addPhoneVisit, getPhoneVisitsByCase, updateCase, getProfessionalServicesByCase } = useStore()
+  const { cases, sentences, settings, addPhoneVisit, updatePhoneVisit, getPhoneVisitsByCase, updateCase, getProfessionalServicesByCase } = useStore()
 
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
@@ -151,6 +151,19 @@ function PhoneVisitContent() {
   const [goalTracking, setGoalTracking] = useState<Record<GoalKey, { status: string; percent: string }>>({ ...EMPTY_GOAL_TRACKING })
   const goalLabels = GOAL_LABELS
   const [hb, setHb] = useState<HealthBureauFields>({ ...EMPTY_HEALTH_BUREAU_FIELDS })
+  const [editingVisitId, setEditingVisitId] = useState<string | undefined>(undefined)
+  // 本月已存過的紀錄內容（存檔前的基準版本），新產生的內容會疊加在這份基準之上，
+  // 而不是取代它，重新組合句型時才不會把已存過的內容洗掉
+  const [monthBaseline, setMonthBaseline] = useState<{ content: string; hb: HealthBureauFields } | null>(null)
+  const [queryingMonthly, setQueryingMonthly] = useState(false)
+  const [monthlyQueryResult, setMonthlyQueryResult] = useState<{
+    found: boolean
+    content: string
+    target: string
+    hb: HealthBureauFields
+    localId?: string
+    source: 'local' | 'cloud'
+  } | null>(null)
 
   const pickRandom = (pool: Sentence[], exclude?: string) => {
     const others = exclude ? pool.filter(s => s.text !== exclude) : pool
@@ -272,6 +285,99 @@ function PhoneVisitContent() {
     setGoalTracking(content ? parseGoalBlock(content) : { ...EMPTY_GOAL_TRACKING })
   }, [mounted, selectedCaseId, remoteCases])
 
+  // 衛生局一個月只能上傳一份紀錄。切換個案或電訪日期（月份）時，先清掉上一個個案／月份查詢到的
+  // 結果，避免誤把別筆資料的基準內容帶到新的個案／月份上；是否要查詢、匯入本月已存紀錄，
+  // 交由「🔍 查詢本月紀錄」按鈕由使用者主動觸發並自行決定，而非自動帶入。
+  useEffect(() => {
+    setEditingVisitId(undefined)
+    setMonthBaseline(null)
+    setMonthlyQueryResult(null)
+  }, [selectedCaseId, date])
+
+  // 主動查詢本月是否已有電訪紀錄：優先查雲端試算表（跨裝置、跨部署網址都查得到，
+  // 比本機瀏覽器資料可靠），查不到雲端資料才退回查本機的 phoneVisits。
+  const queryMonthlyVisit = async () => {
+    if (!selectedCase) return
+    setQueryingMonthly(true)
+    setMonthlyQueryResult(null)
+    const yearMonth = date.slice(0, 7)
+    const localVisit = getPhoneVisitsByCase(selectedCase.id)
+      .filter(v => v.date.slice(0, 7) === yearMonth)
+      .sort((a, b) => b.date.localeCompare(a.date))[0]
+
+    let cloudHb: HealthBureauFields | undefined
+    let cloudError = ''
+    const idNumber = selectedCase.idNumber?.trim()
+    if (settings.appsScriptUrl && settings.phoneVisitSheetName && idNumber) {
+      try {
+        const res = await fetch('/api/update-case', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            appsScriptUrl: settings.appsScriptUrl,
+            action: 'getPhoneVisits',
+            sheetName: settings.phoneVisitSheetName,
+          }),
+        })
+        const data = await res.json()
+        if (data.synced) {
+          const row = (data.rows || []).find((r: string[]) => (r[0] || '').trim() === idNumber && rocDateToYearMonth(r[1]) === yearMonth)
+          if (row) cloudHb = parseHealthBureauRow(row)
+        } else {
+          cloudError = `雲端查詢失敗${data.error ? '：' + data.error : ''}`
+        }
+      } catch {
+        cloudError = '雲端查詢失敗（網路錯誤）'
+      }
+    }
+
+    const remoteCase = idNumber ? remoteCases.find(r => (r.idNumber || '').trim() === idNumber) : undefined
+    const remoteContentInMonth = remoteCase?.lastPhoneVisitDate?.slice(0, 7) === yearMonth ? remoteCase.lastPhoneVisitContent : undefined
+
+    if (cloudHb) {
+      const content = remoteContentInMonth || localVisit?.content || ''
+      setMonthlyQueryResult({
+        found: true,
+        content,
+        target: (content && targetFromContent(content)) || localVisit?.target || '',
+        hb: cloudHb,
+        localId: localVisit?.id,
+        source: 'cloud',
+      })
+    } else if (localVisit) {
+      setMonthlyQueryResult({
+        found: true,
+        content: localVisit.content,
+        target: localVisit.target,
+        hb: localVisit.healthBureau || { ...EMPTY_HEALTH_BUREAU_FIELDS },
+        localId: localVisit.id,
+        source: 'local',
+      })
+    } else {
+      setMonthlyQueryResult({ found: false, content: '', target: '', hb: { ...EMPTY_HEALTH_BUREAU_FIELDS }, source: 'local' })
+    }
+    if (cloudError) setError(cloudError)
+    setQueryingMonthly(false)
+  }
+
+  const importMonthlyQueryResult = () => {
+    if (!monthlyQueryResult?.found) return
+    setTarget(monthlyQueryResult.target)
+    setGenerated(monthlyQueryResult.content)
+    setHb(monthlyQueryResult.hb)
+    setMonthBaseline({ content: monthlyQueryResult.content, hb: monthlyQueryResult.hb })
+    setEditingVisitId(monthlyQueryResult.localId)
+    setMonthlyQueryResult(null)
+  }
+
+  // 選好個案（及電訪日期所在月份）後自動查一次本月是否已有紀錄，省去多按一次「查詢」的步驟；
+  // 查到結果後一樣只顯示提示，是否要「匯入並補充」仍由使用者自己決定，不會自動蓋掉畫面內容。
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!mounted || !selectedCaseId) return
+    queryMonthlyVisit()
+  }, [mounted, selectedCaseId, date])
+
   const applyPrevPlanBlock = () => {
     if (!selectedCaseId) return
     const { content } = getLatestVisitSource(selectedCaseId)
@@ -306,13 +412,16 @@ function PhoneVisitContent() {
     return lines.join('\n')
   }
 
+  // 若本月已有存過的基準內容（monthBaseline），新產生的內容會疊加在基準之後（用分隔線串接），
+  // 而不是取代掉本月已存的內容，補記月中新增電訪時才不會把月初的紀錄洗掉
   const applyContentToHb = (content: string) => {
     const { narrative, goalBlock, planBlock } = splitContent(content)
+    const baselineHb = monthBaseline?.hb
     setHb(p => ({
       ...p,
-      trackingAdaptation: narrative,
-      goalAchievement: goalBlock,
-      planAppropriateness: planBlock,
+      trackingAdaptation: baselineHb ? joinWithDivider([baselineHb.trackingAdaptation, narrative]) : narrative,
+      goalAchievement: baselineHb ? joinWithDivider([baselineHb.goalAchievement, goalBlock]) : goalBlock,
+      planAppropriateness: baselineHb ? joinWithDivider([baselineHb.planAppropriateness, planBlock]) : planBlock,
       otherHandling: p.otherHandling || '無',
     }))
   }
@@ -339,7 +448,7 @@ ${PLAN_LABELS.aids}：${planBlock.aids}
 ${PLAN_LABELS.respite}：${planBlock.respite}
 ${PLAN_LABELS.referral}：${planBlock.referral}`)
     const result = parts.join('\n')
-    setGenerated(result)
+    setGenerated(monthBaseline ? joinWithDivider([monthBaseline.content, result]) : result)
     applyContentToHb(result)
     setSaved(false)
     setError('')
@@ -370,7 +479,7 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
       const finalContent = goalBlock && markerIndex !== -1
         ? `${data.content.slice(0, markerIndex).trimEnd()}\n\n\n${goalBlock}\n\n${data.content.slice(markerIndex)}`
         : data.content + (goalBlock ? `\n\n\n${goalBlock}` : '')
-      setGenerated(finalContent)
+      setGenerated(monthBaseline ? joinWithDivider([monthBaseline.content, finalContent]) : finalContent)
       applyContentToHb(finalContent)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '產生失敗，請再試一次')
@@ -401,8 +510,9 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
       setError(missingMsg)
       return
     }
+    const visitId = editingVisitId || Date.now().toString()
     const visit = {
-      id: Date.now().toString(),
+      id: visitId,
       caseId: selectedCase.id,
       caseName: selectedCase.name,
       date: `${date} ${time}`,
@@ -410,7 +520,13 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
       content: generated,
       createdAt: new Date().toISOString(),
     }
-    addPhoneVisit({ ...visit, healthBureau: hb })
+    if (editingVisitId) {
+      updatePhoneVisit(editingVisitId, { ...visit, healthBureau: hb })
+    } else {
+      addPhoneVisit({ ...visit, healthBureau: hb })
+    }
+    setEditingVisitId(visitId)
+    setMonthBaseline({ content: generated, hb })
     updateCase(selectedCase.id, { lastPhoneVisitDate: `${date} ${time}`, lastPhoneVisitContent: generated })
     setSaved(true)
     setError('')
@@ -550,6 +666,51 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
               />
             </div>
           </div>
+
+          {selectedCase && (
+            <div className="bg-white rounded-xl border border-gray-100 p-4">
+              <button
+                onClick={queryMonthlyVisit}
+                disabled={queryingMonthly}
+                className="w-full px-3 py-2 border border-[#a3bcaa] text-[#7a9985] rounded-lg text-sm font-medium hover:bg-[#e6ede7] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {queryingMonthly ? '查詢中…' : `🔍 查詢本月（${date.slice(0, 7)}）是否已有紀錄`}
+              </button>
+
+              {monthlyQueryResult && monthlyQueryResult.found && (
+                <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-amber-700 text-sm space-y-2">
+                  <p>
+                    本月已有電訪紀錄（來源：{monthlyQueryResult.source === 'cloud' ? '雲端試算表' : '本機瀏覽器'}），衛生局一個月只接受一份，
+                    要匯入到下方欄位補充後再存檔嗎？
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={importMonthlyQueryResult}
+                      className="px-3 py-1.5 bg-[#7a9985] text-white rounded-lg text-xs font-medium hover:bg-[#50665b] transition-colors"
+                    >
+                      匯入並補充
+                    </button>
+                    <button
+                      onClick={() => setMonthlyQueryResult(null)}
+                      className="px-3 py-1.5 border border-amber-300 text-amber-700 rounded-lg text-xs font-medium hover:bg-amber-100 transition-colors"
+                    >
+                      不用，維持目前內容
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {monthlyQueryResult && !monthlyQueryResult.found && (
+                <p className="mt-3 text-sm text-gray-400">本月尚無紀錄，可直接建立新紀錄。</p>
+              )}
+
+              {editingVisitId && (
+                <p className="mt-3 text-xs text-amber-600">
+                  目前編輯的是本月已匯入的紀錄，儲存時會覆蓋本月紀錄，不會另外新增一筆。
+                </p>
+              )}
+            </div>
+          )}
 
           {selectedCase && (
             <div className="bg-[#e6ede7] rounded-xl p-4">

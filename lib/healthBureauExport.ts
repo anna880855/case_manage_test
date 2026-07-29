@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import type { Case, PhoneVisitRecord } from './types'
+import type { Case, HealthBureauFields, PhoneVisitRecord } from './types'
 import { EMPTY_HEALTH_BUREAU_FIELDS } from './types'
 
 const HEADER = [
@@ -63,12 +63,80 @@ export function splitContent(content: string): { narrative: string; goalBlock: s
   return { narrative, goalBlock, planBlock }
 }
 
+// 衛生局一個月只能上傳一份紀錄，同一個案在同月若有多筆電訪（例如月初聯繫、月中又來電改服務），
+// 匯出前先依個案分組合併成一筆，各筆內容之間用分隔線串接，勾選類欄位採聯集。
+export const HEALTH_BUREAU_MERGE_DIVIDER = '------------------------------'
+
+// 合併多筆同月紀錄的文字內容；完全相同的內容（例如都留預設值「無」）只保留一份，避免分隔線重複無意義的重複文字
+export function joinWithDivider(parts: (string | undefined)[]): string {
+  const nonEmpty = parts.map(p => (p || '').trim()).filter(Boolean)
+  const deduped = nonEmpty.filter((p, i) => nonEmpty.indexOf(p) === i)
+  return deduped.join(`\n${HEALTH_BUREAU_MERGE_DIVIDER}\n`)
+}
+
+export function mergeVisitsForHealthBureau(visits: PhoneVisitRecord[]): PhoneVisitRecord[] {
+  const order: string[] = []
+  const groups = new Map<string, PhoneVisitRecord[]>()
+  for (const visit of visits) {
+    if (!groups.has(visit.caseId)) {
+      groups.set(visit.caseId, [])
+      order.push(visit.caseId)
+    }
+    groups.get(visit.caseId)!.push(visit)
+  }
+
+  return order.map(caseId => {
+    const group = [...groups.get(caseId)!].sort((a, b) => a.date.localeCompare(b.date))
+    if (group.length === 1) return group[0]
+
+    const last = group[group.length - 1]
+    const hbList = group.map(v => v.healthBureau || EMPTY_HEALTH_BUREAU_FIELDS)
+    const anyChecked = (pick: (hb: HealthBureauFields) => boolean) => hbList.some(pick)
+    const joinField = (key: 'trackingAdaptation' | 'goalAchievement' | 'planAppropriateness' | 'otherHandling') =>
+      joinWithDivider(hbList.map(hb => hb[key]))
+
+    const mergedHb: HealthBureauFields = {
+      serviceItems: {
+        adjustPlan: anyChecked(hb => hb.serviceItems.adjustPlan),
+        consultComplaint: anyChecked(hb => hb.serviceItems.consultComplaint),
+        referral: anyChecked(hb => hb.serviceItems.referral),
+        other: anyChecked(hb => hb.serviceItems.other),
+        otherNote: joinWithDivider(hbList.map(hb => hb.serviceItems.otherNote)),
+      },
+      serviceFocus: {
+        trackLinkage: anyChecked(hb => hb.serviceFocus.trackLinkage),
+        planDiscussion: anyChecked(hb => hb.serviceFocus.planDiscussion),
+        resourceLink: anyChecked(hb => hb.serviceFocus.resourceLink),
+        consultComplaint: anyChecked(hb => hb.serviceFocus.consultComplaint),
+        acceptComplaint: anyChecked(hb => hb.serviceFocus.acceptComplaint),
+        other: anyChecked(hb => hb.serviceFocus.other),
+        otherNote: joinWithDivider(hbList.map(hb => hb.serviceFocus.otherNote)),
+      },
+      serviceTarget: {
+        user: anyChecked(hb => hb.serviceTarget.user),
+        caregiver: anyChecked(hb => hb.serviceTarget.caregiver),
+      },
+      trackingAdaptation: joinField('trackingAdaptation'),
+      goalAchievement: joinField('goalAchievement'),
+      planAppropriateness: joinField('planAppropriateness'),
+      otherHandling: joinField('otherHandling'),
+    }
+
+    return {
+      ...last,
+      target: Array.from(new Set(group.map(v => v.target).filter(Boolean))).join('、'),
+      content: joinWithDivider(group.map(v => v.content)),
+      healthBureau: mergedHb,
+    }
+  })
+}
+
 export function buildHealthBureauRows(
   visits: PhoneVisitRecord[],
   cases: Case[],
   managerIdNumber: string
 ): string[][] {
-  return visits.map(visit => {
+  return mergeVisitsForHealthBureau(visits).map(visit => {
     const c = cases.find(x => x.id === visit.caseId)
     const hb = visit.healthBureau || EMPTY_HEALTH_BUREAU_FIELDS
     const { narrative, goalBlock, planBlock } = splitContent(visit.content || '')
@@ -107,7 +175,9 @@ export function exportHealthBureauRowsXls(rows: string[][], fileName: string) {
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, sheet, '工作表1')
   const bookType = fileName.toLowerCase().endsWith('.xls') ? 'xls' : 'xlsx'
-  XLSX.writeFile(workbook, fileName, { bookType })
+  // bookSST 讓 .xls 的文字內容走「共用字串表」寫入路徑，而不是預設會把每個儲存格截斷在 255 字元的路徑
+  // （截斷是 SheetJS 這個路徑本身的限制，共用字串表是 BIFF8 標準機制，兩者產生的都是合法 .xls 檔）
+  XLSX.writeFile(workbook, fileName, { bookType, bookSST: bookType === 'xls' })
 }
 
 export function exportHealthBureauXls(
@@ -128,8 +198,73 @@ export function rocDateToYearMonth(rocDate: string): string {
   return `${roc + 1911}-${mm}`
 }
 
+// 把雲端試算表的一列（25 欄衛生局格式）還原成 HealthBureauFields，供「查詢本月紀錄」功能
+// 從雲端讀回勾選與文字內容時使用（跨裝置查詢時，本機瀏覽器不一定存有這筆紀錄的結構化資料）
+export function parseHealthBureauRow(row: string[]): HealthBureauFields {
+  const checked = (i: number) => row[i] === 'V'
+  return {
+    serviceItems: {
+      adjustPlan: checked(4),
+      consultComplaint: checked(5),
+      referral: checked(6),
+      other: checked(7),
+      otherNote: row[8] || '',
+    },
+    serviceFocus: {
+      trackLinkage: checked(9),
+      planDiscussion: checked(10),
+      resourceLink: checked(11),
+      consultComplaint: checked(12),
+      acceptComplaint: checked(13),
+      other: checked(14),
+      otherNote: row[15] || '',
+    },
+    serviceTarget: {
+      user: checked(16),
+      caregiver: checked(17),
+    },
+    trackingAdaptation: row[21] || '',
+    goalAchievement: row[22] || '',
+    planAppropriateness: row[23] || '',
+    otherHandling: row[24] || '無',
+  }
+}
+
+// 衛生局報表欄位中屬於勾選（V / 空白）與可合併文字的欄位索引，用來把同一身分證字號、
+// 同月份的多筆雲端列（例如合併功能上線前，同案已分次上傳的舊紀錄）合併成一筆
+const RAW_ROW_CHECKBOX_COLS = [2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 16, 17]
+const RAW_ROW_TEXT_JOIN_COLS = [8, 15, 21, 22, 23, 24]
+
+export function mergeRawHealthBureauRows(rows: string[][]): string[][] {
+  const order: string[] = []
+  const groups = new Map<string, string[][]>()
+  for (const row of rows) {
+    const id = row[0]
+    if (!groups.has(id)) {
+      groups.set(id, [])
+      order.push(id)
+    }
+    groups.get(id)!.push(row)
+  }
+
+  return order.map(id => {
+    const group = [...groups.get(id)!].sort((a, b) => a[1].localeCompare(b[1]))
+    if (group.length === 1) return group[0]
+
+    const merged = [...group[group.length - 1]]
+    for (const col of RAW_ROW_CHECKBOX_COLS) {
+      merged[col] = group.some(r => r[col] === 'V') ? 'V' : ''
+    }
+    for (const col of RAW_ROW_TEXT_JOIN_COLS) {
+      merged[col] = joinWithDivider(group.map(r => r[col]))
+    }
+    return merged
+  })
+}
+
 // 把每筆雲端列（25 欄衛生局格式 + 個案姓名）裁成 25 欄；同一筆紀錄（依身分證字號＋日期判斷）以雲端資料為準，
-// 因為使用者可能直接在 Google Sheet 上更正錯誤上傳的個案，本機快取的舊資料不應覆蓋雲端的修正內容
+// 因為使用者可能直接在 Google Sheet 上更正錯誤上傳的個案，本機快取的舊資料不應覆蓋雲端的修正內容。
+// 再依身分證字號合併同月份的多筆列，確保最終每個個案每月只留一筆。
 export function mergeRemoteRows(localRows: string[][], remoteRows: string[][]): string[][] {
   const merged = new Map<string, string[]>()
   for (const row of localRows) {
@@ -138,5 +273,5 @@ export function mergeRemoteRows(localRows: string[][], remoteRows: string[][]): 
   for (const row of remoteRows.map(r => r.slice(0, 25))) {
     merged.set(`${row[0]}|${row[1]}`, row)
   }
-  return Array.from(merged.values()).sort((a, b) => a[1].localeCompare(b[1]))
+  return mergeRawHealthBureauRows(Array.from(merged.values())).sort((a, b) => a[1].localeCompare(b[1]))
 }

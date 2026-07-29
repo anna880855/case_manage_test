@@ -447,7 +447,7 @@ function appendVisitRow(sheetName, record) {
   const focus = hb.serviceFocus || {};
   const target = hb.serviceTarget || {};
   const sheet = getOrCreateVisitSheet(sheetName, PHONE_VISIT_HEADERS);
-  sheet.appendRow([
+  const rowValues = [
     record.idNumber || '',
     toRocDate(record.date),
     'V', '',
@@ -461,7 +461,31 @@ function appendVisitRow(sheetName, record) {
     '', '',
     hb.trackingAdaptation || '', hb.goalAchievement || '', hb.planAppropriateness || '', hb.otherHandling || '無',
     record.caseName || '',
-  ]);
+  ];
+
+  // 衛生局一個月只接受一筆紀錄：同一身分證字號、同一服務月份（ROC 年+月）已有列時直接覆蓋該列，
+  // 而不是新增一列，讓個管師可以分次補記錄，最後匯出時每個個案每月仍只有一列。
+  const recIdNumber = String(record.idNumber || '').trim();
+  const recYearMonth = rocYearMonth(rowValues[1]);
+  if (recIdNumber && recYearMonth) {
+    const data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      var sheetIdNumber = String(data[i][0] || '').trim();
+      var sheetYearMonth = rocYearMonth(String(data[i][1] || '').trim());
+      if (sheetIdNumber === recIdNumber && sheetYearMonth === recYearMonth) {
+        sheet.getRange(i + 1, 1, 1, rowValues.length).setValues([rowValues]);
+        return;
+      }
+    }
+  }
+  sheet.appendRow(rowValues);
+}
+
+// 把 7 碼民國日期（如 "1150703"）取出「年+月」部分（如 "1150 7"→"1150" + "07"），用來判斷是否同月
+function rocYearMonth(rocDate) {
+  var s = String(rocDate || '').trim();
+  if (s.length < 5) return '';
+  return s.slice(0, s.length - 4) + s.slice(-4, -2);
 }
 
 // 讀回家訪紀錄，重建為 HomeVisitRecord 物件陣列
