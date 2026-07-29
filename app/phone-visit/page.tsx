@@ -370,6 +370,14 @@ function PhoneVisitContent() {
     setMonthlyQueryResult(null)
   }
 
+  // 選好個案（及電訪日期所在月份）後自動查一次本月是否已有紀錄，省去多按一次「查詢」的步驟；
+  // 查到結果後一樣只顯示提示，是否要「匯入並補充」仍由使用者自己決定，不會自動蓋掉畫面內容。
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!mounted || !selectedCaseId) return
+    queryMonthlyVisit()
+  }, [mounted, selectedCaseId, date])
+
   const applyPrevPlanBlock = () => {
     if (!selectedCaseId) return
     const { content } = getLatestVisitSource(selectedCaseId)
