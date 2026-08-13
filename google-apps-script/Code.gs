@@ -120,7 +120,14 @@ function doGet(e) {
     } else if (action === 'deleteCase') {
       const caseName = e.parameter.caseName || '';
       const caseNumber = e.parameter.caseNumber || '';
+      const professionalServiceSheetName = e.parameter.professionalServiceSheetName || '';
       deleteCaseRow(caseName, caseNumber);
+      // 家訪紀錄／電訪紀錄／轉介紀錄留存供日後查核與衛生局報表回溯，僅一併清除
+      // 專業服務追蹤紀錄與家訪草稿（皆屬個案刪除後即無意義的暫時性/追蹤性資料）
+      if (professionalServiceSheetName) {
+        deleteProfessionalServiceRowsForCase(professionalServiceSheetName, caseName, caseNumber);
+      }
+      deleteDraftsForCase(caseNumber);
       result = { deleted: true };
     } else if (action === 'appendVisit') {
       const sheetName = e.parameter.sheetName || '';
@@ -325,6 +332,24 @@ function deleteCaseRow(caseName, caseNumber) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
   sheet.deleteRow(rowIndex);
+}
+
+// 刪除個案時，一併清除該個案在「專業服務追蹤紀錄」分頁的所有列（欄位順序見 PROFESSIONAL_SERVICE_HEADERS：
+// A=個案姓名、B=個案編號）；由下往上刪除以避免刪列後索引跑掉漏刪
+function deleteProfessionalServiceRowsForCase(sheetName, caseName, caseNumber) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return;
+  const data = sheet.getDataRange().getValues();
+  const name = String(caseName || '').trim();
+  const num = String(caseNumber || '').trim();
+  if (!name && !num) return;
+  for (var i = data.length - 1; i >= 1; i--) {
+    var rowName = String(data[i][0] || '').trim();
+    var rowNum = String(data[i][1] || '').trim();
+    var match = num ? (rowNum === num) : (rowName === name);
+    if (match) sheet.deleteRow(i + 1);
+  }
 }
 
 // ====================================================
@@ -725,6 +750,18 @@ function deleteDraft(caseNumber, ts) {
       sheet.deleteRow(i + 1);
       return;
     }
+  }
+}
+
+// 刪除個案時，一併清除該個案在「家訪草稿」分頁的所有草稿列（草稿僅以個案編號辨識個案，
+// 沒有案號的個案無法安全比對，略過不刪）；由下往上刪除以避免刪列後索引跑掉漏刪
+function deleteDraftsForCase(caseNumber) {
+  const num = String(caseNumber || '').trim();
+  if (!num) return;
+  const sheet = getOrCreateDraftSheet();
+  const data = sheet.getDataRange().getValues();
+  for (var i = data.length - 1; i >= 1; i--) {
+    if (String(data[i][0] || '').trim() === num) sheet.deleteRow(i + 1);
   }
 }
 
