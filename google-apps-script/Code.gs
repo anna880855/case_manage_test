@@ -9,9 +9,22 @@
 // 4. 部署 → 新增部署作業 → 網頁應用程式
 //    執行身分：「我」，存取：「所有人」
 // 5. 複製網址到系統設定
+// 6.（選用）若要每季自動清除超過一年的電訪／家訪／轉介紀錄與已結案個案，
+//    在編輯器上方函式下拉選單選取 createCleanupTrigger，按「執行」一次即可，
+//    詳見下方「定期清除超過保存期限的舊資料」區塊
 // ====================================================
 
 const SHEET_NAME = '個案資料管理'; // ← 修改為您的工作表名稱
+
+// ====================================================
+// 定期清除舊資料設定
+// ====================================================
+// 以下分頁名稱須與「系統設定」頁面填寫的分頁名稱一致，否則清除不到對應的資料
+const PHONE_VISIT_SHEET_NAME = '電訪紀錄';
+const HOME_VISIT_SHEET_NAME = '家訪紀錄';
+const REFERRAL_SHEET_NAME = '轉介紀錄';
+const PROFESSIONAL_SERVICE_SHEET_NAME_FOR_CLEANUP = '專業服務追蹤紀錄';
+const RETENTION_MONTHS = 12; // 保存期限（月）：電訪／家訪／轉介紀錄與已結案個案，超過此期限即視為可清除
 
 // 欄位對應（支援各種中文欄位名稱）
 const FIELD_MAP = {
@@ -170,6 +183,10 @@ function doGet(e) {
       const ts = e.parameter.ts || '';
       deleteDraft(caseNumber, ts);
       result = { deleted: true };
+    } else if (action === 'cleanupOldRecords') {
+      // 手動立即執行一次定期清除（供測試保存期限設定是否正確用，不受排程限制），
+      // 詳見下方「定期清除超過保存期限的舊資料」區塊
+      result = cleanupOldRecords();
     } else {
       throw new Error('Unknown action: ' + action);
     }
@@ -763,6 +780,129 @@ function deleteDraftsForCase(caseNumber) {
   for (var i = data.length - 1; i >= 1; i--) {
     if (String(data[i][0] || '').trim() === num) sheet.deleteRow(i + 1);
   }
+}
+
+// ====================================================
+// 定期清除超過保存期限的舊資料
+// ====================================================
+// 這些長照服務紀錄會另外上傳至衛生局留存，本機 Sheet 不需長期保留，
+// 依使用者需求：電訪／家訪／轉介紀錄與已結案個案，超過 RETENTION_MONTHS
+// （預設 12 個月）即自動清除；此操作無法復原，請確認資料已完成上傳／備份。
+
+// 手動或排程呼叫皆可：立即依保存期限清除一次，回傳各分頁刪除筆數方便確認結果
+function cleanupOldRecords() {
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - RETENTION_MONTHS);
+
+  const result = {
+    cutoff: toLocalDateStr(cutoff),
+    phoneVisitsDeleted: cleanupSheetByDate(PHONE_VISIT_SHEET_NAME, 1, cutoff, true),
+    homeVisitsDeleted: cleanupSheetByDate(HOME_VISIT_SHEET_NAME, 3, cutoff, false),
+    referralsDeleted: cleanupSheetByDate(REFERRAL_SHEET_NAME, 3, cutoff, false),
+    closedCasesDeleted: cleanupClosedCases(cutoff),
+  };
+  Logger.log(JSON.stringify(result));
+  return result;
+}
+
+// 依指定日期欄位清除某分頁中過期的列；isRocDate 為 true 時該欄位為 7 碼民國日期
+// （電訪紀錄採衛生局報表格式），否則視為一般西元日期／Date 物件
+function cleanupSheetByDate(sheetName, dateColIdx, cutoff, isRocDate) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return 0;
+  const data = sheet.getDataRange().getValues();
+  let deleted = 0;
+  for (var i = data.length - 1; i >= 1; i--) {
+    var d = isRocDate ? parseRocDateCell(data[i][dateColIdx]) : parseDateCell(data[i][dateColIdx]);
+    if (d && d < cutoff) {
+      sheet.deleteRow(i + 1);
+      deleted++;
+    }
+  }
+  return deleted;
+}
+
+// 清除已結案且最後活動（家訪／電訪較晚者）已超過保存期限的個案，
+// 並比照手動刪除個案的行為，一併清除其專業服務追蹤紀錄與家訪草稿；
+// 找不到任何家訪／電訪日期可判斷活動時間的結案個案，無法安全判斷是否過期，略過不刪
+function cleanupClosedCases(cutoff) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return 0;
+  const headers = data[0].map(function(h) { return String(h).trim(); });
+
+  const nameColIdx = headers.findIndex(function(h) { return FIELD_MAP[h] === 'name'; });
+  const numColIdx = headers.findIndex(function(h) { return FIELD_MAP[h] === 'caseNumber'; });
+  const statusColIdx = headers.findIndex(function(h) {
+    return ['狀態', '在案狀態', '個案狀態', '服務狀態', '案況'].indexOf(h) >= 0;
+  });
+  const lastHomeColIdx = headers.findIndex(function(h) { return FIELD_MAP[h] === 'lastHomeVisitDate'; });
+  const lastPhoneColIdx = headers.findIndex(function(h) { return FIELD_MAP[h] === 'lastPhoneVisitDate'; });
+  if (statusColIdx < 0) return 0;
+
+  let deleted = 0;
+  for (var i = data.length - 1; i >= 1; i--) {
+    var status = String(data[i][statusColIdx] || '').trim();
+    if (STATUS_MAP[status] !== 'closed') continue;
+
+    var lastHome = lastHomeColIdx >= 0 ? parseDateCell(data[i][lastHomeColIdx]) : null;
+    var lastPhone = lastPhoneColIdx >= 0 ? parseDateCell(data[i][lastPhoneColIdx]) : null;
+    var lastActivity = (lastHome && lastPhone) ? (lastHome > lastPhone ? lastHome : lastPhone) : (lastHome || lastPhone);
+    if (!lastActivity || lastActivity >= cutoff) continue;
+
+    var caseName = nameColIdx >= 0 ? String(data[i][nameColIdx] || '').trim() : '';
+    var caseNumber = numColIdx >= 0 ? String(data[i][numColIdx] || '').trim() : '';
+    sheet.deleteRow(i + 1);
+    deleteProfessionalServiceRowsForCase(PROFESSIONAL_SERVICE_SHEET_NAME_FOR_CLEANUP, caseName, caseNumber);
+    deleteDraftsForCase(caseNumber);
+    deleted++;
+  }
+  return deleted;
+}
+
+function parseDateCell(cell) {
+  if (cell instanceof Date) return cell;
+  var s = String(cell || '').trim();
+  if (!s) return null;
+  var d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function parseRocDateCell(cell) {
+  var s = normalizeRocDateCell(cell);
+  if (!/^\d{7}$/.test(s)) return null;
+  var year = parseInt(s.slice(0, 3), 10) + 1911;
+  var month = parseInt(s.slice(3, 5), 10);
+  var day = parseInt(s.slice(5, 7), 10);
+  var d = new Date(year, month - 1, day);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// ── 排程設定：Apps Script 原生時間觸發器沒有「每 3 個月」的選項，
+// 改用每月 1 號觸發一次，僅在每季第一個月（1、4、7、10 月）實際執行清除，其餘月份略過。
+// 使用方式：在 Apps Script 編輯器選取 createCleanupTrigger 函式並執行「一次」以建立排程，
+// 之後就會依上述週期自動執行，不需要再手動操作。
+
+// 建立／重建每月 1 號的排程觸發器（重複執行本函式不會建立重複的觸發器）
+function createCleanupTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'cleanupOldRecordsScheduled') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('cleanupOldRecordsScheduled')
+    .timeBased()
+    .onMonthDay(1)
+    .atHour(3)
+    .create();
+}
+
+// 排程觸發器實際呼叫的函式：非每季第一個月時直接略過，不執行清除
+function cleanupOldRecordsScheduled() {
+  const quarterStartMonths = [1, 4, 7, 10];
+  const month = new Date().getMonth() + 1;
+  if (quarterStartMonths.indexOf(month) === -1) return;
+  cleanupOldRecords();
 }
 
 function output(data) {
