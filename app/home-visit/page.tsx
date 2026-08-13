@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
+import { syncToAppsScript } from '@/lib/sync'
 import { formatDateOnly } from '@/lib/types'
 import {
   DISEASE_LIST, RETURN_VISIT_METHODS, MEDICATION_STATUS_OPTIONS, MEDICATION_NOTES_OPTIONS,
@@ -747,24 +748,15 @@ ${problemSection}
     if (Object.keys(caseUpdate).length > 0) {
       updateCase(selectedCase.id, caseUpdate)
       if (settings.appsScriptUrl) {
-        try {
-          const res = await fetch('/api/update-case', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              appsScriptUrl: settings.appsScriptUrl,
-              action: 'updateCase',
-              caseName: selectedCase.name,
-              caseNumber: selectedCase.caseNumber,
-              fields: caseUpdate,
-            }),
-          })
-          const data = await res.json()
-          if (!data.synced) {
-            caseUpdateWarning = `個案資料雲端同步失敗${data.error ? '：' + data.error : ''}。`
-          }
-        } catch {
-          caseUpdateWarning = '個案資料雲端同步失敗（網路錯誤）。'
+        const data = await syncToAppsScript({
+          appsScriptUrl: settings.appsScriptUrl,
+          action: 'updateCase',
+          params: { caseName: selectedCase.name, caseNumber: selectedCase.caseNumber, fields: caseUpdate },
+          kind: 'case',
+          label: `家訪後更新個案資料：${selectedCase.name}`,
+        })
+        if (!data.synced) {
+          caseUpdateWarning = `個案資料雲端同步失敗${data.error ? '：' + data.error : ''}。可至「同步狀態」頁面重新送出。`
         }
       }
     }
@@ -772,48 +764,40 @@ ${problemSection}
     setSyncWarning('')
     if (settings.appsScriptUrl) {
       let visitSyncWarning = ''
-      try {
-        const visitRecord = {
-          kind: 'home',
-          caseName: selectedCase.name,
-          caseNumber: selectedCase.caseNumber,
-          idNumber: selectedCase.idNumber || '',
-          date,
-          visitTarget,
-          diseaseHistory: diseaseGenerated,
-          caseSummary: caseGenerated,
-          caregiverInfo: caregiverGenerated || caregiverInput,
-          problemList: rankedProblems,
-          problemExplanations,
-          serviceGoals: careGoals,
-          serviceDetail: {
-            services,
-            transportEnabled,
-            transportation,
-            transportHospital,
-            aidsDetail,
-            respiteEnabled,
-            respiteDetail: respiteDetailText,
-            referral,
-          },
-          planContent: finalDoc,
-        }
-        const visitRes = await fetch('/api/update-case', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            appsScriptUrl: settings.appsScriptUrl,
-            action: 'appendVisit',
-            sheetName: settings.homeVisitSheetName || '家訪紀錄',
-            record: visitRecord,
-          }),
-        })
-        const visitData = await visitRes.json()
-        if (!visitData.synced) {
-          visitSyncWarning = `家訪紀錄雲端同步失敗${visitData.error ? '：' + visitData.error : ''}。`
-        }
-      } catch {
-        visitSyncWarning = '家訪紀錄雲端同步失敗（網路錯誤）。'
+      const visitRecord = {
+        kind: 'home',
+        caseName: selectedCase.name,
+        caseNumber: selectedCase.caseNumber,
+        idNumber: selectedCase.idNumber || '',
+        date,
+        visitTarget,
+        diseaseHistory: diseaseGenerated,
+        caseSummary: caseGenerated,
+        caregiverInfo: caregiverGenerated || caregiverInput,
+        problemList: rankedProblems,
+        problemExplanations,
+        serviceGoals: careGoals,
+        serviceDetail: {
+          services,
+          transportEnabled,
+          transportation,
+          transportHospital,
+          aidsDetail,
+          respiteEnabled,
+          respiteDetail: respiteDetailText,
+          referral,
+        },
+        planContent: finalDoc,
+      }
+      const visitData = await syncToAppsScript({
+        appsScriptUrl: settings.appsScriptUrl,
+        action: 'appendVisit',
+        params: { sheetName: settings.homeVisitSheetName || '家訪紀錄', record: visitRecord },
+        kind: 'homeVisit',
+        label: `家訪紀錄：${selectedCase.name}（${date}）`,
+      })
+      if (!visitData.synced) {
+        visitSyncWarning = `家訪紀錄雲端同步失敗${visitData.error ? '：' + visitData.error : ''}。可至「同步狀態」頁面重新送出。`
       }
       const warnings = [caseUpdateWarning, visitSyncWarning].filter(Boolean).join(' ')
       if (warnings) setSyncWarning(warnings)
@@ -827,24 +811,15 @@ ${problemSection}
     setGoalSyncing(true)
     const fields = { shortGoal: careGoals.short, midGoal: careGoals.mid, longGoal: careGoals.long }
     updateCase(selectedCase.id, fields)
-    try {
-      const res = await fetch('/api/update-case', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          appsScriptUrl: settings.appsScriptUrl,
-          action: 'updateCase',
-          caseName: selectedCase.name,
-          caseNumber: selectedCase.caseNumber,
-          fields,
-        }),
-      })
-      const data = await res.json()
-      if (!data.synced) {
-        setSyncWarning(`照顧目標雲端同步失敗${data.error ? '：' + data.error : ''}。`)
-      }
-    } catch {
-      setSyncWarning('照顧目標雲端同步失敗（網路錯誤）。')
+    const data = await syncToAppsScript({
+      appsScriptUrl: settings.appsScriptUrl,
+      action: 'updateCase',
+      params: { caseName: selectedCase.name, caseNumber: selectedCase.caseNumber, fields },
+      kind: 'careGoals',
+      label: `照顧目標：${selectedCase.name}`,
+    })
+    if (!data.synced) {
+      setSyncWarning(`照顧目標雲端同步失敗${data.error ? '：' + data.error : ''}。可至「同步狀態」頁面重新送出。`)
     }
     setGoalSyncing(false)
     setGoalSynced(true)

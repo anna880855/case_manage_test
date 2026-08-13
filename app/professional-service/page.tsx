@@ -2,6 +2,7 @@
 import { useState, useMemo, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
+import { syncToAppsScript } from '@/lib/sync'
 import type { ProfessionalServiceRecord, ProfessionalServiceStatus } from '@/lib/types'
 import { getServicePeriodProgress, SERVICE_PERIOD_REMINDER_THRESHOLD, formatDateOnly } from '@/lib/types'
 
@@ -122,37 +123,32 @@ function ProfessionalServiceContent() {
     }
     addProfessionalService(record)
     if (settings.appsScriptUrl) {
-      try {
-        const res = await fetch('/api/update-case', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            appsScriptUrl: settings.appsScriptUrl,
-            action: 'appendVisit',
-            sheetName: settings.professionalServiceSheetName || '專業服務追蹤紀錄',
-            record: {
-              kind: 'professionalService',
-              id: record.id,
-              caseName: selectedCase.name,
-              caseNumber: selectedCase.caseNumber,
-              idNumber: selectedCase.idNumber,
-              serviceName: record.serviceName,
-              goal: record.goal,
-              startDate: record.startDate,
-              endDate: record.endDate,
-              plannedSessions: record.plannedSessions,
-              completedSessions: record.completedSessions,
-              status: record.status,
-              notes: record.notes,
-            },
-          }),
-        })
-        const data = await res.json()
-        if (!data.synced) {
-          setError(`已儲存在本機，但雲端同步失敗${data.error ? '：' + data.error : ''}。換電腦前請確認此筆紀錄已同步。`)
-        }
-      } catch {
-        setError('已儲存在本機，但雲端同步失敗（網路錯誤）。')
+      const data = await syncToAppsScript({
+        appsScriptUrl: settings.appsScriptUrl,
+        action: 'appendVisit',
+        params: {
+          sheetName: settings.professionalServiceSheetName || '專業服務追蹤紀錄',
+          record: {
+            kind: 'professionalService',
+            id: record.id,
+            caseName: selectedCase.name,
+            caseNumber: selectedCase.caseNumber,
+            idNumber: selectedCase.idNumber,
+            serviceName: record.serviceName,
+            goal: record.goal,
+            startDate: record.startDate,
+            endDate: record.endDate,
+            plannedSessions: record.plannedSessions,
+            completedSessions: record.completedSessions,
+            status: record.status,
+            notes: record.notes,
+          },
+        },
+        kind: 'professionalService',
+        label: `專業服務追蹤：${selectedCase.name}（${record.serviceName}）`,
+      })
+      if (!data.synced) {
+        setError(`已儲存在本機，但雲端同步失敗${data.error ? '：' + data.error : ''}。可至「同步狀態」頁面重新送出。`)
       }
     } else {
       setError('尚未設定 Apps Script URL，此筆紀錄只存在本機瀏覽器，換電腦將無法看到。')
@@ -166,19 +162,13 @@ function ProfessionalServiceContent() {
   const handleFieldChange = async (record: ProfessionalServiceRecord, fields: Partial<ProfessionalServiceRecord>) => {
     updateProfessionalService(record.id, fields)
     if (settings.appsScriptUrl) {
-      try {
-        await fetch('/api/update-case', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            appsScriptUrl: settings.appsScriptUrl,
-            action: 'updateProfessionalService',
-            sheetName: settings.professionalServiceSheetName || '專業服務追蹤紀錄',
-            id: record.id,
-            fields,
-          }),
-        })
-      } catch {}
+      await syncToAppsScript({
+        appsScriptUrl: settings.appsScriptUrl,
+        action: 'updateProfessionalService',
+        params: { sheetName: settings.professionalServiceSheetName || '專業服務追蹤紀錄', id: record.id, fields },
+        kind: 'professionalService',
+        label: `專業服務追蹤更新：${record.caseName}（${record.serviceName}）`,
+      })
     }
   }
 

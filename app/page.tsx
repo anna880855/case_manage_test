@@ -2,6 +2,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { useStore } from '@/lib/store'
+import { syncToAppsScript } from '@/lib/sync'
 import type { Case } from '@/lib/types'
 import { getServicePeriodProgress, SERVICE_PERIOD_REMINDER_THRESHOLD, formatDateOnly } from '@/lib/types'
 
@@ -154,30 +155,21 @@ function NewCaseModal({ onClose }: { onClose: () => void }) {
       setPendingCase(newCase)
     }
     if (settings.appsScriptUrl) {
-      try {
-        const res = await fetch('/api/update-case', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            appsScriptUrl: settings.appsScriptUrl,
-            action: 'createCase',
-            fields: newCase,
-          }),
-        })
-        const data = await res.json()
-        if (data.synced === false) {
-          setSaving(false)
-          setSyncError(data.error || '同步失敗，個案已存於本機但尚未寫入 Google Sheet')
-          return
-        }
-        if (data.duplicate) {
-          setSaving(false)
-          setDuplicateNotice('Google Sheet 中已有相同案號／姓名的個案，未重複上傳')
-          return
-        }
-      } catch (e: unknown) {
+      const data = await syncToAppsScript({
+        appsScriptUrl: settings.appsScriptUrl,
+        action: 'createCase',
+        params: { fields: newCase },
+        kind: 'case',
+        label: `新增個案：${newCase.name}${newCase.caseNumber ? '（' + newCase.caseNumber + '）' : ''}`,
+      })
+      if (data.synced === false) {
         setSaving(false)
-        setSyncError(e instanceof Error ? e.message : '同步失敗，個案已存於本機但尚未寫入 Google Sheet')
+        setSyncError(data.error || '同步失敗，個案已存於本機但尚未寫入 Google Sheet，可至「同步狀態」頁面重新送出')
+        return
+      }
+      if (data.duplicate) {
+        setSaving(false)
+        setDuplicateNotice('Google Sheet 中已有相同案號／姓名的個案，未重複上傳')
         return
       }
     }

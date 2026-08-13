@@ -2,6 +2,7 @@
 import { useState, useMemo, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
+import { syncToAppsScript } from '@/lib/sync'
 import type { Case, ReferralRecord, ReferralTrackingStatus, Settings } from '@/lib/types'
 import { REFERRAL_TYPES, EMPTY_REFERRAL_TRACKING, formatDateOnly } from '@/lib/types'
 
@@ -116,42 +117,37 @@ function ReferralContent() {
     const record = buildReferralPayload(Date.now().toString())
     addReferral(record)
     if (settings.appsScriptUrl) {
-      try {
-        const res = await fetch('/api/update-case', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            appsScriptUrl: settings.appsScriptUrl,
-            action: 'appendVisit',
-            sheetName: settings.referralSheetName || '轉介紀錄',
-            record: {
-              kind: 'referral',
-              id: record.id,
-              caseName: selectedCase.name,
-              caseNumber: selectedCase.caseNumber,
-              idNumber: selectedCase.idNumber,
-              date,
-              referralTypes,
-              referralTypeOtherNote,
-              receivingUnit: record.receivingUnit,
-              contactPersonType,
-              contactPhone: phonePreview,
-              relationship,
-              caseOverview,
-              referralNeeds,
-              managerName: settings.managerName,
-              trackingStatus: record.trackingStatus,
-              trackingNote: record.trackingNote,
-              trackingDate: record.trackingDate,
-            },
-          }),
-        })
-        const data = await res.json()
-        if (!data.synced) {
-          setError(`已儲存在本機，但雲端同步失敗${data.error ? '：' + data.error : ''}。換電腦前請確認此筆紀錄已同步。`)
-        }
-      } catch {
-        setError('已儲存在本機，但雲端同步失敗（網路錯誤）。')
+      const data = await syncToAppsScript({
+        appsScriptUrl: settings.appsScriptUrl,
+        action: 'appendVisit',
+        params: {
+          sheetName: settings.referralSheetName || '轉介紀錄',
+          record: {
+            kind: 'referral',
+            id: record.id,
+            caseName: selectedCase.name,
+            caseNumber: selectedCase.caseNumber,
+            idNumber: selectedCase.idNumber,
+            date,
+            referralTypes,
+            referralTypeOtherNote,
+            receivingUnit: record.receivingUnit,
+            contactPersonType,
+            contactPhone: phonePreview,
+            relationship,
+            caseOverview,
+            referralNeeds,
+            managerName: settings.managerName,
+            trackingStatus: record.trackingStatus,
+            trackingNote: record.trackingNote,
+            trackingDate: record.trackingDate,
+          },
+        },
+        kind: 'referral',
+        label: `轉介紀錄：${selectedCase.name}（${date}）`,
+      })
+      if (!data.synced) {
+        setError(`已儲存在本機，但雲端同步失敗${data.error ? '：' + data.error : ''}。可至「同步狀態」頁面重新送出。`)
       }
     } else {
       setError('尚未設定 Apps Script URL，此筆紀錄只存在本機瀏覽器，換電腦將無法看到。')
@@ -164,19 +160,13 @@ function ReferralContent() {
   const handleTrackingChange = async (r: ReferralRecord, fields: Partial<ReferralRecord>) => {
     updateReferral(r.id, fields)
     if (settings.appsScriptUrl) {
-      try {
-        await fetch('/api/update-case', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            appsScriptUrl: settings.appsScriptUrl,
-            action: 'updateReferralTracking',
-            sheetName: settings.referralSheetName || '轉介紀錄',
-            id: r.id,
-            fields,
-          }),
-        })
-      } catch {}
+      await syncToAppsScript({
+        appsScriptUrl: settings.appsScriptUrl,
+        action: 'updateReferralTracking',
+        params: { sheetName: settings.referralSheetName || '轉介紀錄', id: r.id, fields },
+        kind: 'referral',
+        label: `轉介追蹤更新：${r.caseName}（${r.date}）`,
+      })
     }
   }
 

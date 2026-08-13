@@ -194,6 +194,29 @@ export function formatDateOnly(value?: string | Date | null): string {
   return `${y}-${m}-${d}`
 }
 
+export type SyncFailureKind = 'case' | 'homeVisit' | 'phoneVisit' | 'referral' | 'professionalService' | 'careGoals'
+
+export const SYNC_FAILURE_KIND_LABEL: Record<SyncFailureKind, string> = {
+  case: '個案資料',
+  homeVisit: '家訪紀錄',
+  phoneVisit: '電訪紀錄',
+  referral: '轉介紀錄',
+  professionalService: '專業服務追蹤',
+  careGoals: '照顧目標',
+}
+
+// 一筆寫入 Google Sheet 失敗的紀錄：斷線、逾時、或 Apps Script 端錯誤時都會記一筆，
+// 讓使用者可以在「同步狀態」頁面看到失敗原因，並針對單一筆重新送出，而不必整批重存。
+export interface SyncFailure {
+  id: string
+  kind: SyncFailureKind
+  label: string
+  action: string
+  requestBody: Record<string, unknown>
+  error: string
+  createdAt: string
+}
+
 export interface Settings {
   appsScriptUrl: string
   claudeApiKey: string
