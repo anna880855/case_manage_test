@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Case, PhoneVisitRecord, HomeVisitRecord, ReferralRecord, ProfessionalServiceRecord, Sentence, Settings } from './types'
+import type { Case, PhoneVisitRecord, HomeVisitRecord, ReferralRecord, ProfessionalServiceRecord, Sentence, Settings, SyncFailure } from './types'
 
 export const DEFAULT_SENTENCES: Sentence[] = [
   // ── service（服務使用，依長照服務大項目分類：居家照顧／日間照顧／交通車服務／喘息服務）──
@@ -78,6 +78,7 @@ interface StoreState {
   settings: Settings
   disabilityReminderDismissed: Record<string, string>
   serviceReminderDismissed: Record<string, boolean>
+  syncFailures: SyncFailure[]
 }
 
 interface StoreActions {
@@ -112,6 +113,9 @@ interface StoreActions {
   getHomeVisitsByCase: (caseId: string) => HomeVisitRecord[]
   getReferralsByCase: (caseId: string) => ReferralRecord[]
   dismissDisabilityReminder: (caseId: string, periodKey: string) => void
+  addSyncFailure: (failure: SyncFailure) => void
+  removeSyncFailure: (id: string) => void
+  clearSyncFailures: () => void
 }
 
 export const useStore = create<StoreState & StoreActions>()(
@@ -138,6 +142,7 @@ export const useStore = create<StoreState & StoreActions>()(
       },
       disabilityReminderDismissed: {},
       serviceReminderDismissed: {},
+      syncFailures: [],
 
       setCases: (cases) => set({ cases }),
 
@@ -268,10 +273,21 @@ export const useStore = create<StoreState & StoreActions>()(
         set((state) => ({
           disabilityReminderDismissed: { ...state.disabilityReminderDismissed, [caseId]: periodKey },
         })),
+
+      // 依 id 覆蓋（upsert）：重試失敗仍失敗時，用新的錯誤原因與時間取代舊紀錄，而不是疊加兩筆
+      addSyncFailure: (failure) =>
+        set((state) => ({
+          syncFailures: [failure, ...state.syncFailures.filter((f) => f.id !== failure.id)],
+        })),
+
+      removeSyncFailure: (id) =>
+        set((state) => ({ syncFailures: state.syncFailures.filter((f) => f.id !== id) })),
+
+      clearSyncFailures: () => set({ syncFailures: [] }),
     }),
     {
       name: 'case-mgmt-v1',
-      version: 12,
+      version: 13,
       migrate: (persistedState: unknown, version: number) => {
         let state = persistedState as StoreState & StoreActions
         if (version < 2) {
@@ -341,6 +357,9 @@ export const useStore = create<StoreState & StoreActions>()(
           const s = (state.settings || {}) as unknown as Record<string, unknown>
           if (!s.professionalServiceSheetName) s.professionalServiceSheetName = '專業服務追蹤紀錄'
           state = { ...state, settings: s as unknown as Settings }
+        }
+        if (version < 13) {
+          state = { ...state, syncFailures: state.syncFailures || [] }
         }
         return state
       },

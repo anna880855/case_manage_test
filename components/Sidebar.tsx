@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
 
 const NAV = [
@@ -11,15 +11,18 @@ const NAV = [
   { href: '/referral', label: '轉介追蹤', icon: '📮' },
   { href: '/professional-service', label: '專業服務追蹤', icon: '🎯' },
   { href: '/health-bureau-export', label: '衛生局報表', icon: '📤' },
+  { href: '/sync-status', label: '同步狀態', icon: '🔄' },
   { href: '/settings', label: '設定', icon: '⚙️' },
 ]
 
 export default function Sidebar() {
   const pathname = usePathname()
-  const { cases, settings, setCases, setSentences, importHomeVisits, importReferrals, importProfessionalServices } = useStore()
+  const { cases, settings, setCases, setSentences, importHomeVisits, importReferrals, importProfessionalServices, syncFailures } = useStore()
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState('')
   const [collapsed, setCollapsed] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
 
   const handleSync = async (silent = false) => {
     if (!settings.appsScriptUrl) {
@@ -93,8 +96,22 @@ export default function Sidebar() {
                 : 'hover:bg-white/10 text-white/80'
             }`}
           >
-            <span className="text-base">{item.icon}</span>
-            {!collapsed && item.label}
+            <span className="text-base relative">
+              {item.icon}
+              {item.href === '/sync-status' && mounted && syncFailures.length > 0 && (
+                <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-red-400 text-white text-[10px] font-semibold leading-none">
+                  {syncFailures.length}
+                </span>
+              )}
+            </span>
+            {!collapsed && (
+              <span className="flex-1 flex items-center justify-between">
+                {item.label}
+                {item.href === '/sync-status' && mounted && syncFailures.length > 0 && (
+                  <span className="text-[10px] text-red-200">{syncFailures.length} 筆失敗</span>
+                )}
+              </span>
+            )}
           </Link>
         ))}
       </nav>

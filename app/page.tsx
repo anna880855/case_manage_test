@@ -2,6 +2,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { useStore } from '@/lib/store'
+import { syncToAppsScript } from '@/lib/sync'
 import type { Case } from '@/lib/types'
 import { getServicePeriodProgress, SERVICE_PERIOD_REMINDER_THRESHOLD, formatDateOnly } from '@/lib/types'
 
@@ -86,6 +87,7 @@ function NewCaseModal({ onClose }: { onClose: () => void }) {
   const [pendingCase, setPendingCase] = useState<Case | null>(null)
   const [parsing, setParsing] = useState(false)
   const [parseError, setParseError] = useState('')
+  const [duplicateNotice, setDuplicateNotice] = useState('')
 
   const set = (field: string, value: string) =>
     setForm(prev => ({ ...prev, [field]: value }))
@@ -153,25 +155,21 @@ function NewCaseModal({ onClose }: { onClose: () => void }) {
       setPendingCase(newCase)
     }
     if (settings.appsScriptUrl) {
-      try {
-        const res = await fetch('/api/update-case', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            appsScriptUrl: settings.appsScriptUrl,
-            action: 'createCase',
-            fields: newCase,
-          }),
-        })
-        const data = await res.json()
-        if (data.synced === false) {
-          setSaving(false)
-          setSyncError(data.error || '同步失敗，個案已存於本機但尚未寫入 Google Sheet')
-          return
-        }
-      } catch (e: unknown) {
+      const data = await syncToAppsScript({
+        appsScriptUrl: settings.appsScriptUrl,
+        action: 'createCase',
+        params: { fields: newCase },
+        kind: 'case',
+        label: `新增個案：${newCase.name}${newCase.caseNumber ? '（' + newCase.caseNumber + '）' : ''}`,
+      })
+      if (data.synced === false) {
         setSaving(false)
-        setSyncError(e instanceof Error ? e.message : '同步失敗，個案已存於本機但尚未寫入 Google Sheet')
+        setSyncError(data.error || '同步失敗，個案已存於本機但尚未寫入 Google Sheet，可至「同步狀態」頁面重新送出')
+        return
+      }
+      if (data.duplicate) {
+        setSaving(false)
+        setDuplicateNotice('Google Sheet 中已有相同案號／姓名的個案，未重複上傳')
         return
       }
     }
@@ -273,16 +271,24 @@ function NewCaseModal({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
+        {duplicateNotice && (
+          <div className="px-6 pb-3">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-blue-700">
+              ℹ {duplicateNotice}
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-3 px-6 pb-5">
           <button
             onClick={onClose}
             className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors"
           >
-            {syncError ? '關閉' : '取消'}
+            {syncError || duplicateNotice ? '關閉' : '取消'}
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!form.name.trim() || saving}
+            disabled={!form.name.trim() || saving || !!duplicateNotice}
             className="flex-1 py-2.5 bg-[#7a9985] text-white rounded-xl text-sm font-medium hover:bg-[#6b8a76] disabled:opacity-40 transition-colors"
           >
             {saving ? '儲存中...' : syncError ? '重試同步' : '新增個案'}

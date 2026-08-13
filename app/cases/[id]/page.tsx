@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
+import { syncToAppsScript } from '@/lib/sync'
 import { formatDateOnly, type Case } from '@/lib/types'
 import { SERVICE_CATALOG, type ServiceCategory } from '@/app/home-visit/constants'
 
@@ -122,23 +123,14 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
     setSaving(true)
     updateCase(c.id, editFields)
     setSyncMsg('更新中...')
-    try {
-      const res = await fetch('/api/update-case', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          appsScriptUrl: settings.appsScriptUrl,
-          action: 'updateCase',
-          caseName: c.name,
-          caseNumber: c.caseNumber,
-          fields: editFields,
-        }),
-      })
-      const data = await res.json()
-      setSyncMsg(data.synced ? '✓ 已同步至 Google Sheet' : '✓ 已更新（未同步 Google Sheet）')
-    } catch {
-      setSyncMsg('✓ 已更新（未同步 Google Sheet）')
-    }
+    const data = await syncToAppsScript({
+      appsScriptUrl: settings.appsScriptUrl,
+      action: 'updateCase',
+      params: { caseName: c.name, caseNumber: c.caseNumber, fields: editFields },
+      kind: 'case',
+      label: `更新個案資料：${c.name}${c.caseNumber ? '（' + c.caseNumber + '）' : ''}`,
+    })
+    setSyncMsg(data.synced ? '✓ 已同步至 Google Sheet' : '✓ 已更新（未同步 Google Sheet，可至「同步狀態」頁面重新送出）')
     setSaving(false)
     setEditing(false)
     setTimeout(() => setSyncMsg(''), 4000)
@@ -148,49 +140,30 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
     if (newStatus === c.status) return
     updateCaseStatus(c.id, newStatus)
     setSyncMsg('更新中...')
-    try {
-      const res = await fetch('/api/update-case', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          appsScriptUrl: settings.appsScriptUrl,
-          action: 'updateStatus',
-          caseName: c.name,
-          caseNumber: c.caseNumber,
-          status: newStatus,
-        }),
-      })
-      const data = await res.json()
-      setSyncMsg(data.synced ? '✓ 已同步至 Google Sheet' : '✓ 已更新（未同步 Google Sheet）')
-    } catch {
-      setSyncMsg('✓ 已更新（未同步 Google Sheet）')
-    }
+    const data = await syncToAppsScript({
+      appsScriptUrl: settings.appsScriptUrl,
+      action: 'updateStatus',
+      params: { caseName: c.name, caseNumber: c.caseNumber, status: newStatus },
+      kind: 'case',
+      label: `更新個案狀態：${c.name}${c.caseNumber ? '（' + c.caseNumber + '）' : ''}`,
+    })
+    setSyncMsg(data.synced ? '✓ 已同步至 Google Sheet' : '✓ 已更新（未同步 Google Sheet，可至「同步狀態」頁面重新送出）')
     setTimeout(() => setSyncMsg(''), 4000)
   }
 
   const handleDelete = async () => {
     setDeleting(true)
     if (settings.appsScriptUrl) {
-      try {
-        const res = await fetch('/api/update-case', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            appsScriptUrl: settings.appsScriptUrl,
-            action: 'deleteCase',
-            caseName: c.name,
-            caseNumber: c.caseNumber,
-          }),
-        })
-        const data = await res.json()
-        if (data.synced === false) {
-          setDeleting(false)
-          setDeleteError(data.error || '同步失敗，Google Sheet 中的資料未被刪除')
-          return
-        }
-      } catch (e: unknown) {
+      const data = await syncToAppsScript({
+        appsScriptUrl: settings.appsScriptUrl,
+        action: 'deleteCase',
+        params: { caseName: c.name, caseNumber: c.caseNumber, professionalServiceSheetName: settings.professionalServiceSheetName },
+        kind: 'case',
+        label: `刪除個案：${c.name}${c.caseNumber ? '（' + c.caseNumber + '）' : ''}`,
+      })
+      if (data.synced === false) {
         setDeleting(false)
-        setDeleteError(e instanceof Error ? e.message : '同步失敗，Google Sheet 中的資料未被刪除')
+        setDeleteError(data.error || '同步失敗，Google Sheet 中的資料未被刪除，可至「同步狀態」頁面重新送出')
         return
       }
     }
@@ -526,7 +499,10 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
       {/* Delete section */}
       <div className="border border-red-100 rounded-xl p-4 bg-red-50/50">
         <h3 className="text-sm font-medium text-red-700 mb-2">刪除個案</h3>
-        <p className="text-xs text-red-500 mb-3">刪除後將同步刪除 Google Sheet 中的整列資料，並移除所有相關紀錄。此操作無法復原。</p>
+        <p className="text-xs text-red-500 mb-3">
+          刪除後將同步刪除 Google Sheet「個案資料管理」中的整列資料，並一併清除「專業服務追蹤紀錄」與「家訪草稿」中屬於此個案的資料；
+          「家訪紀錄」「電訪紀錄」「轉介紀錄」分頁會保留供日後查核與衛生局報表回溯，不會被刪除。此操作無法復原。
+        </p>
         {deleteError && (
           <div className="mb-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
             ⚠ 同步至 Google Sheet 失敗：{deleteError}（個案尚未刪除，可重試或聯絡管理員確認 Apps Script 設定）
@@ -591,19 +567,13 @@ function ServiceArrangementSection({ c }: { c: Case }) {
     const fields: Partial<Case> = { caseHomeServices: services, physicalStatus }
     updateCase(c.id, fields)
     if (settings.appsScriptUrl) {
-      try {
-        await fetch('/api/update-case', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            appsScriptUrl: settings.appsScriptUrl,
-            action: 'updateCase',
-            caseName: c.name,
-            caseNumber: c.caseNumber,
-            fields,
-          }),
-        })
-      } catch {}
+      await syncToAppsScript({
+        appsScriptUrl: settings.appsScriptUrl,
+        action: 'updateCase',
+        params: { caseName: c.name, caseNumber: c.caseNumber, fields },
+        kind: 'case',
+        label: `更新服務安排／身心狀況：${c.name}${c.caseNumber ? '（' + c.caseNumber + '）' : ''}`,
+      })
     }
     setSaving(false)
     setSaved(true)

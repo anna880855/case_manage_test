@@ -21,8 +21,8 @@ export async function POST(req: NextRequest) {
       const { caseName, caseNumber, status } = body
       params = { action: 'updateStatus', caseName, caseNumber: caseNumber || '', status }
     } else if (action === 'deleteCase') {
-      const { caseName, caseNumber } = body
-      params = { action: 'deleteCase', caseName, caseNumber: caseNumber || '' }
+      const { caseName, caseNumber, professionalServiceSheetName } = body
+      params = { action: 'deleteCase', caseName, caseNumber: caseNumber || '', professionalServiceSheetName: professionalServiceSheetName || '' }
     } else if (action === 'appendVisit') {
       const { sheetName, record } = body
       params = { action: 'appendVisit', sheetName, record: JSON.stringify(record) }
@@ -62,6 +62,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       synced: true,
+      duplicate: json.data?.duplicate,
       rows: json.data?.rows,
       visits: json.data?.visits,
       referrals: json.data?.referrals,

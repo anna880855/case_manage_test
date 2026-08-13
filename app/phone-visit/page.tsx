@@ -2,6 +2,7 @@
 import { useState, useMemo, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
+import { syncToAppsScript } from '@/lib/sync'
 import type { Case, Sentence, HealthBureauFields } from '@/lib/types'
 import { EMPTY_HEALTH_BUREAU_FIELDS, formatDateOnly } from '@/lib/types'
 import { AI_STYLE_GUIDE } from '@/lib/aiStyle'
@@ -531,48 +532,38 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
     setSaved(true)
     setError('')
     if (settings.appsScriptUrl) {
-      try {
-        const caseRes = await fetch('/api/update-case', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            appsScriptUrl: settings.appsScriptUrl,
-            action: 'updateCase',
+      const caseData = await syncToAppsScript({
+        appsScriptUrl: settings.appsScriptUrl,
+        action: 'updateCase',
+        params: { caseName: selectedCase.name, caseNumber: selectedCase.caseNumber, fields: { lastPhoneVisitDate: `${date} ${time}`, lastPhoneVisitContent: generated } },
+        kind: 'case',
+        label: `更新最新電訪紀錄：${selectedCase.name}`,
+      })
+      if (!caseData.synced) {
+        setError(`已儲存在本機，但雲端同步失敗${caseData.error ? '：' + caseData.error : ''}。可至「同步狀態」頁面重新送出。`)
+      }
+      const visitData = await syncToAppsScript({
+        appsScriptUrl: settings.appsScriptUrl,
+        action: 'appendVisit',
+        params: {
+          sheetName: settings.phoneVisitSheetName,
+          record: {
+            kind: 'phone',
             caseName: selectedCase.name,
             caseNumber: selectedCase.caseNumber,
-            fields: { lastPhoneVisitDate: `${date} ${time}`, lastPhoneVisitContent: generated },
-          }),
-        })
-        const caseData = await caseRes.json()
-        if (!caseData.synced) {
-          setError(`已儲存在本機，但雲端同步失敗${caseData.error ? '：' + caseData.error : ''}。換電腦前請確認此筆紀錄已同步。`)
-        }
-        const visitRes = await fetch('/api/update-case', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            appsScriptUrl: settings.appsScriptUrl,
-            action: 'appendVisit',
-            sheetName: settings.phoneVisitSheetName,
-            record: {
-              kind: 'phone',
-              caseName: selectedCase.name,
-              caseNumber: selectedCase.caseNumber,
-              idNumber: selectedCase.idNumber,
-              date: `${date} ${time}`,
-              target: target || selectedCase.guardian || selectedCase.name,
-              content: generated,
-              healthBureau: hb,
-              managerIdNumber: settings.managerIdNumber,
-            },
-          }),
-        })
-        const visitData = await visitRes.json()
-        if (!visitData.synced) {
-          setError(`已儲存在本機，但電訪分頁同步失敗${visitData.error ? '：' + visitData.error : ''}。換電腦前請確認此筆紀錄已同步。`)
-        }
-      } catch {
-        setError('已儲存在本機，但雲端同步失敗（網路錯誤）。換電腦前請確認此筆紀錄已同步。')
+            idNumber: selectedCase.idNumber,
+            date: `${date} ${time}`,
+            target: target || selectedCase.guardian || selectedCase.name,
+            content: generated,
+            healthBureau: hb,
+            managerIdNumber: settings.managerIdNumber,
+          },
+        },
+        kind: 'phoneVisit',
+        label: `電訪紀錄：${selectedCase.name}（${date}）`,
+      })
+      if (!visitData.synced) {
+        setError(`已儲存在本機，但電訪分頁同步失敗${visitData.error ? '：' + visitData.error : ''}。可至「同步狀態」頁面重新送出。`)
       }
     } else {
       setError('尚未設定 Apps Script URL，此筆紀錄只存在本機瀏覽器，換電腦將無法看到。請至「系統設定」設定後重新儲存。')
