@@ -62,6 +62,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       synced: true,
+      duplicate: json.data?.duplicate,
       rows: json.data?.rows,
       visits: json.data?.visits,
       referrals: json.data?.referrals,

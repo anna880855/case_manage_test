@@ -103,8 +103,8 @@ function doGet(e) {
       result = { cases: getCases() };
     } else if (action === 'createCase') {
       const fields = JSON.parse(e.parameter.fields || '{}');
-      createCaseRow(fields);
-      result = { created: true };
+      const created = createCaseRow(fields);
+      result = { created: created, duplicate: !created };
     } else if (action === 'updateCase') {
       const caseName = e.parameter.caseName || '';
       const caseNumber = e.parameter.caseNumber || '';
@@ -261,11 +261,43 @@ function fieldsToRow(headers, fields) {
   });
 }
 
+// 案號＋個案姓名只會有一種搭配，用來判斷是否為重複個案：
+// 案號相同（不論姓名是否打字有落差）或姓名相同（無案號時）都視為同一位個案
+function findDuplicateRow(caseName, caseNumber) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return -1;
+  const headers = data[0].map(function(h) { return String(h).trim(); });
+
+  const nameColIdx = headers.findIndex(function(h) { return FIELD_MAP[h] === 'name'; });
+  const numColIdx = headers.findIndex(function(h) { return FIELD_MAP[h] === 'caseNumber'; });
+
+  const name = String(caseName || '').trim();
+  const num = String(caseNumber || '').trim();
+  if (!name && !num) return -1;
+
+  for (var i = 1; i < data.length; i++) {
+    var rowName = nameColIdx >= 0 ? String(data[i][nameColIdx] || '').trim() : '';
+    var rowNum = numColIdx >= 0 ? String(data[i][numColIdx] || '').trim() : '';
+    if (!rowName && !rowNum) continue;
+    if (num && rowNum && rowNum === num) return i + 1;
+    if (name && rowName === name && (!num || !rowNum)) return i + 1;
+  }
+  return -1;
+}
+
+// 新增個案列前先檢查是否已存在相同案號／姓名的個案，避免斷線重試或重複點擊
+// 造成同一個案被上傳兩次；回傳 true 表示已實際新增，false 表示偵測到重複而略過
 function createCaseRow(fields) {
+  if (findDuplicateRow(fields.name, fields.caseNumber) > 0) {
+    return false;
+  }
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(function(h) { return String(h).trim(); });
   sheet.appendRow(fieldsToRow(headers, fields));
+  return true;
 }
 
 function updateCaseFields(caseName, caseNumber, fields) {

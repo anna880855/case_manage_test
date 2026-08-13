@@ -193,6 +193,7 @@ function HomeVisitContent() {
   const [diseaseChecked, setDiseaseChecked] = useState<Record<string, boolean>>({})
   const [diseaseSubs, setDiseaseSubs] = useState<Record<string, string[]>>({})
   const [diseaseTexts, setDiseaseTexts] = useState<Record<string, string>>({})
+  const [diseaseSubOtherTexts, setDiseaseSubOtherTexts] = useState<Record<string, string>>({})
   const [returnVisit, setReturnVisit] = useState<string[]>([])
   const [hospital, setHospital] = useState('')
   const [medicationStatus, setMedicationStatus] = useState<string[]>([])
@@ -323,7 +324,7 @@ function HomeVisitContent() {
   // ── Draft helpers
   const getDraftData = () => ({
     visitTarget, date,
-    diseaseChecked, diseaseSubs, diseaseTexts, returnVisit, hospital,
+    diseaseChecked, diseaseSubs, diseaseTexts, diseaseSubOtherTexts, returnVisit, hospital,
     medicationStatus, medicationNotes, diseaseGenerated,
     memory, cognition, emotion, consciousness, comprehension, expression, vision, hearing,
     physiological, ampLocation, toiletingStatus, bowel, incontinence, bathing,
@@ -347,6 +348,7 @@ function HomeVisitContent() {
     if (d.diseaseChecked) setDiseaseChecked(d.diseaseChecked)
     if (d.diseaseSubs) setDiseaseSubs(d.diseaseSubs)
     if (d.diseaseTexts) setDiseaseTexts(d.diseaseTexts)
+    if (d.diseaseSubOtherTexts) setDiseaseSubOtherTexts(d.diseaseSubOtherTexts)
     if (d.returnVisit) setReturnVisit(d.returnVisit)
     if (d.hospital !== undefined) setHospital(d.hospital)
     if (d.medicationStatus) setMedicationStatus(d.medicationStatus)
@@ -520,7 +522,8 @@ function HomeVisitContent() {
         .map(d => {
           let line = d.label
           const subs = diseaseSubs[d.key] || []
-          if (subs.length) line += `（${subs.join('、')}）`
+          const subsDisplay = subs.map(s => (s === '其他' && diseaseSubOtherTexts[d.key]) ? `其他：${diseaseSubOtherTexts[d.key]}` : s)
+          if (subsDisplay.length) line += `（${subsDisplay.join('、')}）`
           if (d.hasText && diseaseTexts[d.key]) line += `：${diseaseTexts[d.key]}`
           return line
         })
@@ -1182,6 +1185,17 @@ ${problemSection}
                                 </label>
                               ))}
                             </div>
+                          )}
+                          {(diseaseSubs[d.key] || []).includes('其他') && (
+                            <input
+                              type="text"
+                              placeholder="請輸入其他說明"
+                              value={diseaseSubOtherTexts[d.key] || ''}
+                              onChange={e =>
+                                setDiseaseSubOtherTexts(prev => ({ ...prev, [d.key]: e.target.value }))
+                              }
+                              className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#a3bcaa]"
+                            />
                           )}
                           {d.hasText && (
                             <input

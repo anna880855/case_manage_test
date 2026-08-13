@@ -86,6 +86,7 @@ function NewCaseModal({ onClose }: { onClose: () => void }) {
   const [pendingCase, setPendingCase] = useState<Case | null>(null)
   const [parsing, setParsing] = useState(false)
   const [parseError, setParseError] = useState('')
+  const [duplicateNotice, setDuplicateNotice] = useState('')
 
   const set = (field: string, value: string) =>
     setForm(prev => ({ ...prev, [field]: value }))
@@ -167,6 +168,11 @@ function NewCaseModal({ onClose }: { onClose: () => void }) {
         if (data.synced === false) {
           setSaving(false)
           setSyncError(data.error || '同步失敗，個案已存於本機但尚未寫入 Google Sheet')
+          return
+        }
+        if (data.duplicate) {
+          setSaving(false)
+          setDuplicateNotice('Google Sheet 中已有相同案號／姓名的個案，未重複上傳')
           return
         }
       } catch (e: unknown) {
@@ -273,16 +279,24 @@ function NewCaseModal({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
+        {duplicateNotice && (
+          <div className="px-6 pb-3">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-blue-700">
+              ℹ {duplicateNotice}
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-3 px-6 pb-5">
           <button
             onClick={onClose}
             className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors"
           >
-            {syncError ? '關閉' : '取消'}
+            {syncError || duplicateNotice ? '關閉' : '取消'}
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!form.name.trim() || saving}
+            disabled={!form.name.trim() || saving || !!duplicateNotice}
             className="flex-1 py-2.5 bg-[#7a9985] text-white rounded-xl text-sm font-medium hover:bg-[#6b8a76] disabled:opacity-40 transition-colors"
           >
             {saving ? '儲存中...' : syncError ? '重試同步' : '新增個案'}
