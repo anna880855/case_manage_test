@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { fetchWithRetry } from '@/lib/serverFetch'
 
 export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get('url')
@@ -10,32 +11,36 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const [casesRes, homeVisitsRes, referralsRes, professionalServicesRes] = await Promise.all([
-      fetch(`${url}?action=getCasesOnly`, { redirect: 'follow', cache: 'no-store' }),
-      fetch(`${url}?action=getHomeVisits&sheetName=${encodeURIComponent(homeVisitSheetName)}`, { redirect: 'follow', cache: 'no-store' }),
-      fetch(`${url}?action=getReferrals&sheetName=${encodeURIComponent(referralSheetName)}`, { redirect: 'follow', cache: 'no-store' }),
-      fetch(`${url}?action=getProfessionalServices&sheetName=${encodeURIComponent(professionalServiceSheetName)}`, { redirect: 'follow', cache: 'no-store' }),
+    // 四個 action 各自重試，互不拖累：其中一個瞬斷不會讓另外三個也白跑，
+    // 但 getCasesOnly 是核心資料，最終仍失敗的話要整個請求失敗（見下方 casesResult 檢查）。
+    const [casesResult, homeVisitsResult, referralsResult, professionalServicesResult] = await Promise.allSettled([
+      fetchWithRetry(`${url}?action=getCasesOnly`, { redirect: 'follow', cache: 'no-store' }, { label: 'getCasesOnly' }),
+      fetchWithRetry(`${url}?action=getHomeVisits&sheetName=${encodeURIComponent(homeVisitSheetName)}`, { redirect: 'follow', cache: 'no-store' }, { label: 'getHomeVisits' }),
+      fetchWithRetry(`${url}?action=getReferrals&sheetName=${encodeURIComponent(referralSheetName)}`, { redirect: 'follow', cache: 'no-store' }, { label: 'getReferrals' }),
+      fetchWithRetry(`${url}?action=getProfessionalServices&sheetName=${encodeURIComponent(professionalServiceSheetName)}`, { redirect: 'follow', cache: 'no-store' }, { label: 'getProfessionalServices' }),
     ])
 
-    if (!casesRes.ok) throw new Error(`HTTP ${casesRes.status}`)
-    const casesJson = await casesRes.json()
+    if (casesResult.status === 'rejected') {
+      throw casesResult.reason instanceof Error ? casesResult.reason : new Error('同步失敗')
+    }
+    const casesJson = await casesResult.value.json()
     if (!casesJson.ok) throw new Error(casesJson.error || 'Apps Script 回傳錯誤')
 
     let homeVisits: unknown[] = []
-    if (homeVisitsRes.ok) {
-      const hvJson = await homeVisitsRes.json()
+    if (homeVisitsResult.status === 'fulfilled') {
+      const hvJson = await homeVisitsResult.value.json()
       if (hvJson.ok) homeVisits = hvJson.data?.visits || []
     }
 
     let referrals: unknown[] = []
-    if (referralsRes.ok) {
-      const refJson = await referralsRes.json()
+    if (referralsResult.status === 'fulfilled') {
+      const refJson = await referralsResult.value.json()
       if (refJson.ok) referrals = refJson.data?.referrals || []
     }
 
     let professionalServices: unknown[] = []
-    if (professionalServicesRes.ok) {
-      const psJson = await professionalServicesRes.json()
+    if (professionalServicesResult.status === 'fulfilled') {
+      const psJson = await professionalServicesResult.value.json()
       if (psJson.ok) professionalServices = psJson.data?.professionalServices || []
     }
 
