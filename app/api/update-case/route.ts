@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { fetchWithRetry } from '@/lib/serverFetch'
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
@@ -48,14 +49,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'unknown action' }, { status: 400 })
     }
 
-    const res = await fetch(appsScriptUrl, {
-      method: 'POST',
-      redirect: 'follow',
-      cache: 'no-store',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams(params).toString(),
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const res = await fetchWithRetry(
+      appsScriptUrl,
+      {
+        method: 'POST',
+        redirect: 'follow',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(params).toString(),
+      },
+      { label: `action=${action}` }
+    )
     const json = await res.json()
     if (!json.ok) throw new Error(json.error || 'Apps Script 回傳錯誤')
 
