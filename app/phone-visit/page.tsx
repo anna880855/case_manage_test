@@ -17,14 +17,16 @@ const CATEGORY_LABELS: Record<PhoneCategory, string> = {
   plan: '計畫需求',
 }
 
+// 目標追蹤、服務計劃這兩段是固定格式的既有資料，不請 AI 覆述——AI 生成的自然語言
+// 無法保證每次都逐字重現固定文字（冒號全形/半形、換行數量都可能跑掉），改由
+// assemblePhoneVisitContent() 在本機把這兩段接在 AI 產生的訪談內容後面，格式才會穩定。
 function buildPrompt(
   c: Case,
   pickedSentences: { category: string; text: string }[],
   customNote: string,
   target: string,
   date: string,
-  managerName: string,
-  planBlock: Record<PlanKey, string>
+  managerName: string
 ): string {
   const sentenceBlock = pickedSentences.map(s => `【${s.category}】${s.text}`).join('\n')
   return `你是一位專業的個案管理師（${managerName}），請根據以下資訊產生一份正式的電訪紀錄，使用繁體中文，語氣專業具體，150-250字。
@@ -45,18 +47,12 @@ ${customNote ? `\n補充說明（請一併融入）：${customNote}` : ''}
 
 ${AI_STYLE_GUIDE}
 
-請依照以下固定格式輸出（直接輸出，不要加任何說明文字，「三、訪談內容」之後的項目請直接照抄下方內容，不要自行改寫或新增）：
+請依照以下固定格式輸出（直接輸出，不要加任何說明文字，只需輸出到「三、訪談內容」這段，後面不用附加其他項目）：
 
 一、電訪日期：${date}
 二、電訪對象：${target || c.guardian || c.name}
 三、訪談內容：
-（150-250字流暢段落）
-
-${PLAN_LABELS.care}：${planBlock.care}
-${PLAN_LABELS.transport}：${planBlock.transport}
-${PLAN_LABELS.aids}：${planBlock.aids}
-${PLAN_LABELS.respite}：${planBlock.respite}
-${PLAN_LABELS.referral}：${planBlock.referral}`
+（150-250字流暢段落）`
 }
 
 const PLAN_KEYS = ['care', 'transport', 'aids', 'respite', 'referral'] as const
@@ -75,6 +71,19 @@ const PLAN_DEFAULTS: Record<PlanKey, string> = {
   respite: '與案家屬確認暫無需求。',
   referral: '無轉介。',
 }
+function buildPlanBlockText(planBlock: Record<PlanKey, string>): string {
+  return PLAN_KEYS.map(key => `${PLAN_LABELS[key]}：${planBlock[key]}`).join('\n')
+}
+
+// 把訪談內容（AI 產生或直接組合皆可）、目標追蹤、服務計劃三段接成完整電訪紀錄，
+// 固定用這個函式組裝，兩種產生方式的排版才會永遠一致。
+function assemblePhoneVisitContent(narrativeHead: string, goalBlock: string, planBlock: Record<PlanKey, string>): string {
+  const parts = [narrativeHead]
+  if (goalBlock) parts.push('', '', goalBlock)
+  parts.push('', buildPlanBlockText(planBlock))
+  return parts.join('\n')
+}
+
 const PLAN_PATTERNS: Record<PlanKey, RegExp> = {
   care: /照顧及專業服務：([^\n]*)/,
   transport: /交通接送服務：([^\n]*)/,
@@ -437,18 +446,12 @@ function PhoneVisitContent() {
     const visitTarget = target || selectedCase.guardian || selectedCase.name
     const content = pickedSentences.map(s => s.text).join(pickedSentences.length > 1 ? '　' : '')
     const goalBlock = buildGoalBlock()
-    const parts = [
+    const narrativeHead = [
       `一、電訪日期：民國${year}年${month}月${day}日 ${time}`,
       `二、電訪對象：${visitTarget}`,
       `三、訪談內容：\n${content}${customNote ? `　${customNote}` : ''}`,
-    ]
-    if (goalBlock) parts.push('', '', goalBlock)
-    parts.push('', `${PLAN_LABELS.care}：${planBlock.care}
-${PLAN_LABELS.transport}：${planBlock.transport}
-${PLAN_LABELS.aids}：${planBlock.aids}
-${PLAN_LABELS.respite}：${planBlock.respite}
-${PLAN_LABELS.referral}：${planBlock.referral}`)
-    const result = parts.join('\n')
+    ].join('\n')
+    const result = assemblePhoneVisitContent(narrativeHead, goalBlock, planBlock)
     setGenerated(monthBaseline ? joinWithDivider([monthBaseline.content, result]) : result)
     applyContentToHb(result)
     setSaved(false)
@@ -468,18 +471,14 @@ ${PLAN_LABELS.referral}：${planBlock.referral}`)
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: buildPrompt(selectedCase, pickedSentences, customNote, target, `${date} ${time}`, settings.managerName, planBlock),
+          prompt: buildPrompt(selectedCase, pickedSentences, customNote, target, `${date} ${time}`, settings.managerName),
           apiKey: settings.claudeApiKey,
         }),
       })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
       const goalBlock = buildGoalBlock()
-      const marker = PLAN_LABELS.care
-      const markerIndex = data.content.indexOf(marker)
-      const finalContent = goalBlock && markerIndex !== -1
-        ? `${data.content.slice(0, markerIndex).trimEnd()}\n\n\n${goalBlock}\n\n${data.content.slice(markerIndex)}`
-        : data.content + (goalBlock ? `\n\n\n${goalBlock}` : '')
+      const finalContent = assemblePhoneVisitContent(data.content.trimEnd(), goalBlock, planBlock)
       setGenerated(monthBaseline ? joinWithDivider([monthBaseline.content, finalContent]) : finalContent)
       applyContentToHb(finalContent)
     } catch (e: unknown) {

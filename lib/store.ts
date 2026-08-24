@@ -105,6 +105,7 @@ interface StoreActions {
   importProfessionalServices: (records: ProfessionalServiceRecord[]) => void
   dismissServiceReminder: (id: string) => void
   addSentence: (sentence: Sentence) => void
+  updateSentence: (id: string, fields: Partial<Sentence>) => void
   deleteSentence: (id: string) => void
   setSentences: (sentences: Sentence[]) => void
   updateSettings: (settings: Partial<Settings>) => void
@@ -139,6 +140,7 @@ export const useStore = create<StoreState & StoreActions>()(
         homeVisitSheetName: '家訪紀錄',
         referralSheetName: '轉介紀錄',
         professionalServiceSheetName: '專業服務追蹤紀錄',
+        sentenceSheetName: '電訪句型庫',
       },
       disabilityReminderDismissed: {},
       serviceReminderDismissed: {},
@@ -250,6 +252,11 @@ export const useStore = create<StoreState & StoreActions>()(
       addSentence: (sentence) =>
         set((state) => ({ sentences: [...state.sentences, sentence] })),
 
+      updateSentence: (id, fields) =>
+        set((state) => ({
+          sentences: state.sentences.map((s) => (s.id === id ? { ...s, ...fields } : s)),
+        })),
+
       deleteSentence: (id) =>
         set((state) => ({ sentences: state.sentences.filter((s) => s.id !== id) })),
 
@@ -287,7 +294,7 @@ export const useStore = create<StoreState & StoreActions>()(
     }),
     {
       name: 'case-mgmt-v1',
-      version: 13,
+      version: 14,
       migrate: (persistedState: unknown, version: number) => {
         let state = persistedState as StoreState & StoreActions
         if (version < 2) {
@@ -360,6 +367,11 @@ export const useStore = create<StoreState & StoreActions>()(
         }
         if (version < 13) {
           state = { ...state, syncFailures: state.syncFailures || [] }
+        }
+        if (version < 14) {
+          const s = (state.settings || {}) as unknown as Record<string, unknown>
+          if (!s.sentenceSheetName) s.sentenceSheetName = '電訪句型庫'
+          state = { ...state, settings: s as unknown as Settings }
         }
         return state
       },

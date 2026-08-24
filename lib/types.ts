@@ -1,3 +1,6 @@
+// 長照服務大項目，供「個案服務項目」勾選與電訪句型庫的 serviceType 篩選共用同一份清單
+export const SERVICE_TYPES = ['居家照顧', '日間照顧', '交通車服務', '喘息服務'] as const
+
 export interface Case {
   id: string
   name: string
@@ -194,7 +197,7 @@ export function formatDateOnly(value?: string | Date | null): string {
   return `${y}-${m}-${d}`
 }
 
-export type SyncFailureKind = 'case' | 'homeVisit' | 'phoneVisit' | 'referral' | 'professionalService' | 'careGoals'
+export type SyncFailureKind = 'case' | 'homeVisit' | 'phoneVisit' | 'referral' | 'professionalService' | 'careGoals' | 'sentence'
 
 export const SYNC_FAILURE_KIND_LABEL: Record<SyncFailureKind, string> = {
   case: '個案資料',
@@ -203,6 +206,7 @@ export const SYNC_FAILURE_KIND_LABEL: Record<SyncFailureKind, string> = {
   referral: '轉介紀錄',
   professionalService: '專業服務追蹤',
   careGoals: '照顧目標',
+  sentence: '電訪句型庫',
 }
 
 // 一筆寫入 Google Sheet 失敗的紀錄：斷線、逾時、或 Apps Script 端錯誤時都會記一筆，
@@ -229,4 +233,5 @@ export interface Settings {
   homeVisitSheetName: string
   referralSheetName: string
   professionalServiceSheetName: string
+  sentenceSheetName: string
 }

@@ -45,6 +45,18 @@ export async function POST(req: NextRequest) {
     } else if (action === 'updateProfessionalService') {
       const { sheetName, id, fields } = body
       params = { action: 'updateProfessionalService', sheetName, id, fields: JSON.stringify(fields) }
+    } else if (action === 'addSentence') {
+      const { sheetName, sentence } = body
+      params = { action: 'addSentence', sheetName, sentence: JSON.stringify(sentence) }
+    } else if (action === 'updateSentence') {
+      const { sheetName, id, fields } = body
+      params = { action: 'updateSentence', sheetName, id, fields: JSON.stringify(fields) }
+    } else if (action === 'deleteSentence') {
+      const { sheetName, id } = body
+      params = { action: 'deleteSentence', sheetName, id }
+    } else if (action === 'setSentences') {
+      const { sheetName, sentences } = body
+      params = { action: 'setSentences', sheetName, sentences: JSON.stringify(sentences) }
     } else {
       return NextResponse.json({ ok: false, error: 'unknown action' }, { status: 400 })
     }
