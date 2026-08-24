@@ -772,7 +772,7 @@ function ServiceArrangementSection({ c }: { c: Case }) {
                   value={customName}
                   onChange={e => setCustomName(e.target.value)}
                   placeholder="服務名稱"
-                  onKeyDown={e => e.key === 'Enter' && addCustom()}
+                  onKeyDown={e => e.key === 'Enter' && !e.nativeEvent.isComposing && addCustom()}
                   className="flex-1 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#a3bcaa]"
                 />
                 <button

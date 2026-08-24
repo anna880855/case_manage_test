@@ -299,7 +299,7 @@ export default function SettingsPage() {
               type="text"
               value={newSentence.text}
               onChange={e => setNewSentence(prev => ({ ...prev, text: e.target.value }))}
-              onKeyDown={e => e.key === 'Enter' && handleAddSentence()}
+              onKeyDown={e => e.key === 'Enter' && !e.nativeEvent.isComposing && handleAddSentence()}
               placeholder="句型內容"
               className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
             />

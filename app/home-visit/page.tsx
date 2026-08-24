@@ -1747,7 +1747,7 @@ ${problemSection}
                             onChange={e => setCustomServiceName(e.target.value)}
                             placeholder="服務名稱"
                             className="flex-1 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#a3bcaa]"
-                            onKeyDown={e => e.key === 'Enter' && addCustomService()}
+                            onKeyDown={e => e.key === 'Enter' && !e.nativeEvent.isComposing && addCustomService()}
                           />
                           <button
                             onClick={addCustomService}
