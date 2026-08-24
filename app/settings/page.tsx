@@ -1,7 +1,8 @@
 'use client'
 import { useState } from 'react'
 import { useStore, DEFAULT_SENTENCES } from '@/lib/store'
-import { SERVICE_TYPES } from '@/lib/types'
+import { syncToAppsScript } from '@/lib/sync'
+import { SERVICE_TYPES, type Sentence } from '@/lib/types'
 
 export default function SettingsPage() {
   const { settings, updateSettings, sentences, addSentence, updateSentence, deleteSentence, setSentences } = useStore()
@@ -10,6 +11,8 @@ export default function SettingsPage() {
   const [testResult, setTestResult] = useState('')
   const [newSentence, setNewSentence] = useState({ category: '', text: '', serviceType: '' })
   const [resetDone, setResetDone] = useState(false)
+  const [uploadingSentences, setUploadingSentences] = useState(false)
+  const [uploadMsg, setUploadMsg] = useState('')
 
   const categories = Array.from(new Set(sentences.map(s => s.category)))
 
@@ -46,15 +49,69 @@ export default function SettingsPage() {
 
   const handleAddSentence = () => {
     if (!newSentence.category.trim() || !newSentence.text.trim()) return
-    addSentence({
+    const sentence: Sentence = {
       id: Date.now().toString(),
       category: newSentence.category.trim(),
       text: newSentence.text.trim(),
       ...(newSentence.category.trim() === 'service' && newSentence.serviceType
         ? { serviceType: newSentence.serviceType }
         : {}),
-    })
+    }
+    addSentence(sentence)
     setNewSentence({ category: '', text: '', serviceType: '' })
+    syncToAppsScript({
+      appsScriptUrl: settings.appsScriptUrl,
+      action: 'addSentence',
+      params: { sheetName: settings.sentenceSheetName, sentence },
+      kind: 'sentence',
+      label: `新增句型：${sentence.text.slice(0, 20)}`,
+    })
+  }
+
+  const handleUpdateSentenceServiceType = (s: Sentence, serviceType: string) => {
+    // 存空字串而不是 undefined：fields 會經 JSON.stringify 送到雲端，undefined 的欄位
+    // 會被序列化直接丟掉，「清空服務項目」這個動作就永遠同步不過去
+    const fields = { serviceType }
+    updateSentence(s.id, fields)
+    syncToAppsScript({
+      appsScriptUrl: settings.appsScriptUrl,
+      action: 'updateSentence',
+      params: { sheetName: settings.sentenceSheetName, id: s.id, fields },
+      kind: 'sentence',
+      label: `修改句型服務項目：${s.text.slice(0, 20)}`,
+    })
+  }
+
+  const handleDeleteSentence = (s: Sentence) => {
+    deleteSentence(s.id)
+    syncToAppsScript({
+      appsScriptUrl: settings.appsScriptUrl,
+      action: 'deleteSentence',
+      params: { sheetName: settings.sentenceSheetName, id: s.id },
+      kind: 'sentence',
+      label: `刪除句型：${s.text.slice(0, 20)}`,
+    })
+  }
+
+  const handleUploadSentences = async () => {
+    if (!settings.appsScriptUrl) {
+      setUploadMsg('請先填入 Apps Script URL')
+      setTimeout(() => setUploadMsg(''), 3000)
+      return
+    }
+    if (!confirm(`確定要用本機目前的 ${sentences.length} 筆句型，整批覆蓋雲端的句型庫嗎？\n（雲端句型庫上原本的內容會被取代，此動作僅供第一次啟用共用句型庫時使用）`)) return
+    setUploadingSentences(true)
+    setUploadMsg('')
+    const data = await syncToAppsScript({
+      appsScriptUrl: settings.appsScriptUrl,
+      action: 'setSentences',
+      params: { sheetName: settings.sentenceSheetName, sentences },
+      kind: 'sentence',
+      label: '上傳本機句型庫到雲端',
+    })
+    setUploadMsg(data.synced ? `✓ 已上傳 ${sentences.length} 筆句型到雲端` : `✗ 上傳失敗${data.error ? '：' + data.error : ''}`)
+    setUploadingSentences(false)
+    setTimeout(() => setUploadMsg(''), 4000)
   }
 
   return (
@@ -184,19 +241,35 @@ export default function SettingsPage() {
 
       {/* Sentence Management */}
       <div className="bg-white rounded-xl border border-gray-100 p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-1">
           <h3 className="font-semibold text-gray-700">電訪句型管理</h3>
-          <button
-            onClick={handleResetSentences}
-            className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
-              resetDone
-                ? 'bg-green-100 text-green-700 border-green-200'
-                : 'text-gray-500 border-gray-200 hover:bg-gray-50'
-            }`}
-          >
-            {resetDone ? '✓ 已重設' : '重設預設句型庫'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleUploadSentences}
+              disabled={uploadingSentences}
+              className="px-3 py-1.5 text-xs rounded-lg border text-gray-500 border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+            >
+              {uploadingSentences ? '上傳中…' : '☁️ 上傳本機句型庫到雲端'}
+            </button>
+            <button
+              onClick={handleResetSentences}
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                resetDone
+                  ? 'bg-green-100 text-green-700 border-green-200'
+                  : 'text-gray-500 border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              {resetDone ? '✓ 已重設' : '重設預設句型庫'}
+            </button>
+          </div>
         </div>
+        <p className="text-xs text-gray-400 mb-3">
+          新增、修改服務項目、刪除句型都會即時同步到雲端句型庫，其他人按「同步個案」即可取得。
+          若雲端句型庫還是空的（第一次啟用），請先按「上傳本機句型庫到雲端」。
+        </p>
+        {uploadMsg && (
+          <p className={`text-xs mb-3 ${uploadMsg.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{uploadMsg}</p>
+        )}
 
         <div className="bg-gray-50 rounded-lg p-4 mb-4">
           <p className="text-sm font-medium text-gray-600 mb-2">新增句型</p>
@@ -255,7 +328,7 @@ export default function SettingsPage() {
                     {cat === 'service' && (
                       <select
                         value={s.serviceType || ''}
-                        onChange={e => updateSentence(s.id, { serviceType: e.target.value || undefined })}
+                        onChange={e => handleUpdateSentenceServiceType(s, e.target.value)}
                         className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-gray-500 focus:outline-none focus:ring-1 focus:ring-[#a3bcaa]"
                       >
                         <option value="">服務項目（不限）</option>
@@ -263,7 +336,7 @@ export default function SettingsPage() {
                       </select>
                     )}
                     <button
-                      onClick={() => deleteSentence(s.id)}
+                      onClick={() => handleDeleteSentence(s)}
                       className="opacity-0 group-hover:opacity-100 text-xs text-red-400 hover:text-red-600 transition-opacity px-2"
                     >
                       刪除

@@ -40,16 +40,19 @@ export default function Sidebar() {
         homeVisitSheetName: settings.homeVisitSheetName || '家訪紀錄',
         referralSheetName: settings.referralSheetName || '轉介紀錄',
         professionalServiceSheetName: settings.professionalServiceSheetName || '專業服務追蹤紀錄',
+        sentenceSheetName: settings.sentenceSheetName || '電訪句型庫',
       })
       const res = await fetch(`/api/sync?${params}`)
       const data = await res.json()
       if (data.error) throw new Error(data.error)
       if (data.cases) setCases(data.cases)
-      if (data.sentences) setSentences(data.sentences)
+      // 雲端句型庫還沒有人上傳過任何資料時會是空陣列，這裡不覆蓋本機，避免把本機句型庫洗空；
+      // 要讓雲端變成大家共用的版本，需先在「設定」頁按「上傳本機句型庫到雲端」
+      if (data.sentences?.length) setSentences(data.sentences)
       if (data.homeVisits?.length) importHomeVisits(data.homeVisits)
       if (data.referrals?.length) importReferrals(data.referrals)
       if (data.professionalServices?.length) importProfessionalServices(data.professionalServices)
-      setSyncMsg(`已同步 ${data.cases?.length || 0} 筆個案、${data.homeVisits?.length || 0} 筆家訪、${data.referrals?.length || 0} 筆轉介、${data.professionalServices?.length || 0} 筆專業服務`)
+      setSyncMsg(`已同步 ${data.cases?.length || 0} 筆個案、${data.homeVisits?.length || 0} 筆家訪、${data.referrals?.length || 0} 筆轉介、${data.professionalServices?.length || 0} 筆專業服務、${data.sentences?.length || 0} 筆句型`)
     } catch (e: unknown) {
       if (!silent) setSyncMsg(e instanceof Error ? e.message : '同步失敗')
     } finally {

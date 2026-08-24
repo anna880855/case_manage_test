@@ -183,6 +183,30 @@ function doGet(e) {
       const ts = e.parameter.ts || '';
       deleteDraft(caseNumber, ts);
       result = { deleted: true };
+    } else if (action === 'getSentences') {
+      const sheetName = e.parameter.sheetName || '';
+      result = { sentences: getSentenceRows(sheetName) };
+    } else if (action === 'addSentence') {
+      const sheetName = e.parameter.sheetName || '';
+      const sentence = JSON.parse(e.parameter.sentence || '{}');
+      addSentenceRow(sheetName, sentence);
+      result = { added: true };
+    } else if (action === 'updateSentence') {
+      const sheetName = e.parameter.sheetName || '';
+      const id = e.parameter.id || '';
+      const fields = JSON.parse(e.parameter.fields || '{}');
+      updateSentenceRow(sheetName, id, fields);
+      result = { updated: true };
+    } else if (action === 'deleteSentence') {
+      const sheetName = e.parameter.sheetName || '';
+      const id = e.parameter.id || '';
+      deleteSentenceRow(sheetName, id);
+      result = { deleted: true };
+    } else if (action === 'setSentences') {
+      const sheetName = e.parameter.sheetName || '';
+      const sentences = JSON.parse(e.parameter.sentences || '[]');
+      setSentenceRows(sheetName, sentences);
+      result = { set: true };
     } else if (action === 'cleanupOldRecords') {
       // 手動立即執行一次定期清除（供測試保存期限設定是否正確用，不受排程限制），
       // 詳見下方「定期清除超過保存期限的舊資料」區塊
@@ -724,6 +748,73 @@ function updateProfessionalServiceRow(sheetName, id, fields) {
     }
   }
   throw new Error('找不到對應的專業服務追蹤紀錄');
+}
+
+// ====================================================
+// 電訪句型庫（讓所有個管師共用同一份句型，供電訪產生器抽句使用）
+// ====================================================
+
+const SENTENCE_HEADERS = ['id', '分類', '服務項目', '句型內容'];
+
+function getOrCreateSentenceSheet(sheetName) {
+  return getOrCreateVisitSheet(sheetName, SENTENCE_HEADERS);
+}
+
+function getSentenceRows(sheetName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return [];
+  return data.slice(1)
+    .filter(function(row) { return String(row[0] || '').trim(); })
+    .map(function(row) {
+      const obj = { id: String(row[0] || ''), category: String(row[1] || ''), text: String(row[3] || '') };
+      const serviceType = String(row[2] || '').trim();
+      if (serviceType) obj.serviceType = serviceType;
+      return obj;
+    });
+}
+
+// 依 id（第一欄）找列號，找不到回傳 -1
+function findSentenceRow(sheet, id) {
+  const data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0] || '') === id) return i + 1;
+  }
+  return -1;
+}
+
+// 新增前先檢查 id 是否已存在，避免斷線重試造成同一句型被重複寫入
+function addSentenceRow(sheetName, sentence) {
+  const sheet = getOrCreateSentenceSheet(sheetName);
+  if (findSentenceRow(sheet, sentence.id) > 0) return;
+  sheet.appendRow([sentence.id || '', sentence.category || '', sentence.serviceType || '', sentence.text || '']);
+}
+
+function updateSentenceRow(sheetName, id, fields) {
+  const sheet = getOrCreateSentenceSheet(sheetName);
+  const rowIndex = findSentenceRow(sheet, id);
+  if (rowIndex < 0) throw new Error('找不到句型：' + id);
+  if (fields.category !== undefined) sheet.getRange(rowIndex, 2).setValue(fields.category);
+  if (fields.serviceType !== undefined) sheet.getRange(rowIndex, 3).setValue(fields.serviceType || '');
+  if (fields.text !== undefined) sheet.getRange(rowIndex, 4).setValue(fields.text);
+}
+
+function deleteSentenceRow(sheetName, id) {
+  const sheet = getOrCreateSentenceSheet(sheetName);
+  const rowIndex = findSentenceRow(sheet, id);
+  if (rowIndex < 0) return;
+  sheet.deleteRow(rowIndex);
+}
+
+// 整批覆蓋雲端句型庫，供「上傳本機句型庫到雲端」這類一次性動作使用
+function setSentenceRows(sheetName, sentences) {
+  const sheet = getOrCreateSentenceSheet(sheetName);
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, SENTENCE_HEADERS.length).clearContent();
+  const rows = (sentences || []).map(function(s) { return [s.id || '', s.category || '', s.serviceType || '', s.text || '']; });
+  if (rows.length > 0) sheet.getRange(2, 1, rows.length, SENTENCE_HEADERS.length).setValues(rows);
 }
 
 // ====================================================

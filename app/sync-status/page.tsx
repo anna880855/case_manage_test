@@ -5,7 +5,7 @@ import { useStore } from '@/lib/store'
 import { retrySyncFailure } from '@/lib/sync'
 import { SYNC_FAILURE_KIND_LABEL, type SyncFailureKind } from '@/lib/types'
 
-const KIND_ORDER: SyncFailureKind[] = ['case', 'homeVisit', 'phoneVisit', 'referral', 'professionalService', 'careGoals']
+const KIND_ORDER: SyncFailureKind[] = ['case', 'homeVisit', 'phoneVisit', 'referral', 'professionalService', 'careGoals', 'sentence']
 
 function formatTime(iso: string) {
   const d = new Date(iso)

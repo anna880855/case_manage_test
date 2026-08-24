@@ -197,7 +197,7 @@ export function formatDateOnly(value?: string | Date | null): string {
   return `${y}-${m}-${d}`
 }
 
-export type SyncFailureKind = 'case' | 'homeVisit' | 'phoneVisit' | 'referral' | 'professionalService' | 'careGoals'
+export type SyncFailureKind = 'case' | 'homeVisit' | 'phoneVisit' | 'referral' | 'professionalService' | 'careGoals' | 'sentence'
 
 export const SYNC_FAILURE_KIND_LABEL: Record<SyncFailureKind, string> = {
   case: '個案資料',
@@ -206,6 +206,7 @@ export const SYNC_FAILURE_KIND_LABEL: Record<SyncFailureKind, string> = {
   referral: '轉介紀錄',
   professionalService: '專業服務追蹤',
   careGoals: '照顧目標',
+  sentence: '電訪句型庫',
 }
 
 // 一筆寫入 Google Sheet 失敗的紀錄：斷線、逾時、或 Apps Script 端錯誤時都會記一筆，
@@ -232,4 +233,5 @@ export interface Settings {
   homeVisitSheetName: string
   referralSheetName: string
   professionalServiceSheetName: string
+  sentenceSheetName: string
 }
