@@ -1,3 +1,6 @@
+// 長照服務大項目，供「個案服務項目」勾選與電訪句型庫的 serviceType 篩選共用同一份清單
+export const SERVICE_TYPES = ['居家照顧', '日間照顧', '交通車服務', '喘息服務'] as const
+
 export interface Case {
   id: string
   name: string

@@ -105,6 +105,7 @@ interface StoreActions {
   importProfessionalServices: (records: ProfessionalServiceRecord[]) => void
   dismissServiceReminder: (id: string) => void
   addSentence: (sentence: Sentence) => void
+  updateSentence: (id: string, fields: Partial<Sentence>) => void
   deleteSentence: (id: string) => void
   setSentences: (sentences: Sentence[]) => void
   updateSettings: (settings: Partial<Settings>) => void
@@ -249,6 +250,11 @@ export const useStore = create<StoreState & StoreActions>()(
 
       addSentence: (sentence) =>
         set((state) => ({ sentences: [...state.sentences, sentence] })),
+
+      updateSentence: (id, fields) =>
+        set((state) => ({
+          sentences: state.sentences.map((s) => (s.id === id ? { ...s, ...fields } : s)),
+        })),
 
       deleteSentence: (id) =>
         set((state) => ({ sentences: state.sentences.filter((s) => s.id !== id) })),

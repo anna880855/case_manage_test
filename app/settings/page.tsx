@@ -1,13 +1,14 @@
 'use client'
 import { useState } from 'react'
 import { useStore, DEFAULT_SENTENCES } from '@/lib/store'
+import { SERVICE_TYPES } from '@/lib/types'
 
 export default function SettingsPage() {
-  const { settings, updateSettings, sentences, addSentence, deleteSentence, setSentences } = useStore()
+  const { settings, updateSettings, sentences, addSentence, updateSentence, deleteSentence, setSentences } = useStore()
   const [saved, setSaved] = useState(false)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState('')
-  const [newSentence, setNewSentence] = useState({ category: '', text: '' })
+  const [newSentence, setNewSentence] = useState({ category: '', text: '', serviceType: '' })
   const [resetDone, setResetDone] = useState(false)
 
   const categories = Array.from(new Set(sentences.map(s => s.category)))
@@ -49,8 +50,11 @@ export default function SettingsPage() {
       id: Date.now().toString(),
       category: newSentence.category.trim(),
       text: newSentence.text.trim(),
+      ...(newSentence.category.trim() === 'service' && newSentence.serviceType
+        ? { serviceType: newSentence.serviceType }
+        : {}),
     })
-    setNewSentence({ category: '', text: '' })
+    setNewSentence({ category: '', text: '', serviceType: '' })
   }
 
   return (
@@ -200,7 +204,7 @@ export default function SettingsPage() {
             <input
               type="text"
               value={newSentence.category}
-              onChange={e => setNewSentence(prev => ({ ...prev, category: e.target.value }))}
+              onChange={e => setNewSentence(prev => ({ ...prev, category: e.target.value, serviceType: e.target.value.trim() === 'service' ? prev.serviceType : '' }))}
               placeholder="分類"
               list="cat-list"
               className="w-32 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
@@ -208,6 +212,16 @@ export default function SettingsPage() {
             <datalist id="cat-list">
               {categories.map(c => <option key={c} value={c} />)}
             </datalist>
+            {newSentence.category.trim() === 'service' && (
+              <select
+                value={newSentence.serviceType}
+                onChange={e => setNewSentence(prev => ({ ...prev, serviceType: e.target.value }))}
+                className="w-32 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
+              >
+                <option value="">服務項目（不限）</option>
+                {SERVICE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            )}
             <input
               type="text"
               value={newSentence.text}
@@ -223,6 +237,11 @@ export default function SettingsPage() {
               新增
             </button>
           </div>
+          {newSentence.category.trim() === 'service' && (
+            <p className="text-xs text-gray-400 mt-2">
+              服務項目：套用電訪產生器時，會優先挑選服務項目符合個案目前服務的句型；選「不限」則各種個案都可能抽到。
+            </p>
+          )}
         </div>
 
         <div className="space-y-4">
@@ -233,6 +252,16 @@ export default function SettingsPage() {
                 {sentences.filter(s => s.category === cat).map(s => (
                   <div key={s.id} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg group">
                     <p className="flex-1 text-sm text-gray-700">{s.text}</p>
+                    {cat === 'service' && (
+                      <select
+                        value={s.serviceType || ''}
+                        onChange={e => updateSentence(s.id, { serviceType: e.target.value || undefined })}
+                        className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-gray-500 focus:outline-none focus:ring-1 focus:ring-[#a3bcaa]"
+                      >
+                        <option value="">服務項目（不限）</option>
+                        {SERVICE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    )}
                     <button
                       onClick={() => deleteSentence(s.id)}
                       className="opacity-0 group-hover:opacity-100 text-xs text-red-400 hover:text-red-600 transition-opacity px-2"

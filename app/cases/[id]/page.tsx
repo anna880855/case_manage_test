@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
 import { syncToAppsScript } from '@/lib/sync'
-import { formatDateOnly, type Case } from '@/lib/types'
+import { formatDateOnly, SERVICE_TYPES, type Case } from '@/lib/types'
 import { SERVICE_CATALOG, type ServiceCategory } from '@/app/home-visit/constants'
 
 const STATUS_OPTIONS: { value: Case['status']; label: string; color: string }[] = [
@@ -272,7 +272,7 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
           <div className="mt-4 space-y-2">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">服務項目（長照服務大項目，供電訪句型篩選使用）</p>
             <div className="flex flex-wrap gap-2">
-              {['居家照顧', '日間照顧', '交通車服務', '喘息服務'].map(svc => {
+              {SERVICE_TYPES.map(svc => {
                 const checked = (ef.services || []).includes(svc)
                 return (
                   <button
