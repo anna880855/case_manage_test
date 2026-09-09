@@ -76,11 +76,13 @@ function ProfessionalServiceContent() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  const resetForm = () => {
+  // 帶入類型參數而非讀取 state：type 才剛 setTrackingType，此次 render 內 state 還是舊值，
+  // 若改讀 state 會在「輔具」類型下重設成沒算到期日的空白表單
+  const resetForm = (t: TrackingType = trackingType) => {
     setServiceName('')
     setGoal('')
     setStartDate(todayStr)
-    setEndDate('')
+    setEndDate(t === 'device' ? addMonths(todayStr, DEVICE_RENEWAL_MONTHS) : '')
     setOrderNumber('')
     setPlannedSessions('')
     setNotes('')
@@ -95,7 +97,7 @@ function ProfessionalServiceContent() {
 
   const handleSelectType = (t: TrackingType) => {
     setTrackingType(t)
-    resetForm()
+    resetForm(t)
   }
 
   // 輔具類型：核發日一變動就自動帶出「核發日＋6個月」的到期日，個管師可再手動調整
