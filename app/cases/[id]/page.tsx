@@ -461,10 +461,10 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
 
       <div className="bg-white rounded-xl border border-gray-100 p-5 mb-6">
         <h3 className="font-semibold text-gray-700 mb-3">
-          專業服務／輔具追蹤 <span className="text-gray-400 font-normal text-sm">({professionalServices.length})</span>
+          專業服務/輔具追蹤 <span className="text-gray-400 font-normal text-sm">({professionalServices.length})</span>
         </h3>
         {professionalServices.length === 0 ? (
-          <p className="text-sm text-gray-400">尚無專業服務／輔具追蹤紀錄</p>
+          <p className="text-sm text-gray-400">尚無專業服務/輔具追蹤紀錄</p>
         ) : (
           <div className="space-y-2">
             {professionalServices.slice(0, 5).map(s => {
@@ -499,7 +499,7 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
           href={`/professional-service?caseId=${c.id}`}
           className="inline-block mt-3 text-xs text-[#7a9985] hover:underline"
         >
-          前往專業服務／輔具追蹤頁面管理 →
+          前往專業服務/輔具追蹤頁面管理 →
         </Link>
       </div>
 

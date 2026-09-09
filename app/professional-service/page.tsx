@@ -225,7 +225,7 @@ function ProfessionalServiceContent() {
 
   return (
     <div className="max-w-6xl">
-      <h2 className="text-2xl font-bold text-gray-800 mb-4">專業服務／輔具追蹤</h2>
+      <h2 className="text-2xl font-bold text-gray-800 mb-4">專業服務/輔具追蹤</h2>
 
       <div className="flex gap-1 mb-4">
         {TRACKING_TYPE_ORDER.map(t => (
