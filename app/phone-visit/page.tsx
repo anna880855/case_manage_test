@@ -224,7 +224,7 @@ function PhoneVisitContent() {
   const selectedCase = cases.find(c => c.id === selectedCaseId)
   const recentVisits = selectedCaseId ? getPhoneVisitsByCase(selectedCaseId).slice(0, 2) : []
   const activeProfServices = selectedCaseId
-    ? getProfessionalServicesByCase(selectedCaseId).filter(r => r.status === 'active')
+    ? getProfessionalServicesByCase(selectedCaseId).filter(r => r.status === 'active' && (r.trackingType || 'professional') === 'professional')
     : []
 
   const filteredCases = useMemo(() => {
@@ -610,7 +610,7 @@ function PhoneVisitContent() {
                 >
                   <div className="flex items-center gap-1.5">
                     <span className="font-medium">{c.name}</span>
-                    {getProfessionalServicesByCase(c.id).some(r => r.status === 'active') && (
+                    {getProfessionalServicesByCase(c.id).some(r => r.status === 'active' && (r.trackingType || 'professional') === 'professional') && (
                       <span
                         title="使用中的專業服務"
                         className="w-1.5 h-1.5 rounded-full bg-orange-400 flex-shrink-0"

@@ -3,8 +3,12 @@ import { useState, useMemo, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { syncToAppsScript } from '@/lib/sync'
-import type { ProfessionalServiceRecord, ProfessionalServiceStatus } from '@/lib/types'
-import { getServicePeriodProgress, SERVICE_PERIOD_REMINDER_THRESHOLD, formatDateOnly } from '@/lib/types'
+import type { ProfessionalServiceRecord, ProfessionalServiceStatus, TrackingType } from '@/lib/types'
+import {
+  getServicePeriodProgress, SERVICE_PERIOD_REMINDER_THRESHOLD, formatDateOnly,
+  TRACKING_TYPE_LABEL, DEVICE_RENEWAL_MONTHS, DEVICE_RENEWAL_REMINDER_DAYS,
+  addMonths, getDeviceRenewalDaysLeft, isDeviceRenewalDue,
+} from '@/lib/types'
 
 const STATUS_LABELS: Record<ProfessionalServiceStatus, string> = {
   active: '進行中',
@@ -17,6 +21,12 @@ const STATUS_COLORS: Record<ProfessionalServiceStatus, string> = {
   stopped: 'bg-red-50 text-red-500',
 }
 const STATUS_ORDER: ProfessionalServiceStatus[] = ['active', 'completed', 'stopped']
+const TRACKING_TYPE_ORDER: TrackingType[] = ['professional', 'device']
+
+// 舊資料沒有 trackingType 欄位，一律視為專業服務
+function getType(r: ProfessionalServiceRecord): TrackingType {
+  return r.trackingType || 'professional'
+}
 
 function ProfessionalServiceContent() {
   const searchParams = useSearchParams()
@@ -42,6 +52,10 @@ function ProfessionalServiceContent() {
   const [selectedCaseId, setSelectedCaseId] = useState(searchParams.get('caseId') || '')
   const selectedCase = cases.find(c => c.id === selectedCaseId)
 
+  // ── 追蹤類型：專業服務 或 輔具（如爬梯機）
+  const [trackingType, setTrackingType] = useState<TrackingType>('professional')
+  const isDevice = trackingType === 'device'
+
   const filteredCases = useMemo(() => {
     const q = caseSearch.trim().toLowerCase()
     if (!q) return activeCases
@@ -50,22 +64,26 @@ function ProfessionalServiceContent() {
     )
   }, [activeCases, caseSearch])
 
-  // ── form state
+  // ── form state（依 trackingType 顯示不同欄位，共用同一組 state）
   const [serviceName, setServiceName] = useState('')
   const [goal, setGoal] = useState('')
   const [startDate, setStartDate] = useState(todayStr)
   const [endDate, setEndDate] = useState('')
+  const [orderNumber, setOrderNumber] = useState('')
   const [plannedSessions, setPlannedSessions] = useState('')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  const resetForm = () => {
+  // 帶入類型參數而非讀取 state：type 才剛 setTrackingType，此次 render 內 state 還是舊值，
+  // 若改讀 state 會在「輔具」類型下重設成沒算到期日的空白表單
+  const resetForm = (t: TrackingType = trackingType) => {
     setServiceName('')
     setGoal('')
     setStartDate(todayStr)
-    setEndDate('')
+    setEndDate(t === 'device' ? addMonths(todayStr, DEVICE_RENEWAL_MONTHS) : '')
+    setOrderNumber('')
     setPlannedSessions('')
     setNotes('')
     setError('')
@@ -77,7 +95,19 @@ function ProfessionalServiceContent() {
     resetForm()
   }
 
-  const records = selectedCaseId ? getProfessionalServicesByCase(selectedCaseId) : []
+  const handleSelectType = (t: TrackingType) => {
+    setTrackingType(t)
+    resetForm(t)
+  }
+
+  // 輔具類型：核發日一變動就自動帶出「核發日＋6個月」的到期日，個管師可再手動調整
+  const handleDeviceStartDateChange = (value: string) => {
+    setStartDate(value)
+    setEndDate(addMonths(value, DEVICE_RENEWAL_MONTHS))
+  }
+
+  const records = (selectedCaseId ? getProfessionalServicesByCase(selectedCaseId) : [])
+    .filter(r => getType(r) === trackingType)
 
   // ── 全部個案服務清單
   const [listStatusFilter, setListStatusFilter] = useState<ProfessionalServiceStatus | 'all'>('active')
@@ -85,16 +115,18 @@ function ProfessionalServiceContent() {
   const allServiceRows = useMemo(() => {
     const q = listSearch.trim().toLowerCase()
     return professionalServices
+      .filter(r => getType(r) === trackingType)
       .filter(r => listStatusFilter === 'all' || r.status === listStatusFilter)
-      .filter(r => !q || r.caseName.toLowerCase().includes(q) || r.serviceName.toLowerCase().includes(q))
+      .filter(r => !q || r.caseName.toLowerCase().includes(q) || r.serviceName.toLowerCase().includes(q) || (r.orderNumber || '').toLowerCase().includes(q))
       .sort((a, b) => a.caseName.localeCompare(b.caseName, 'zh-Hant'))
-  }, [professionalServices, listStatusFilter, listSearch])
+  }, [professionalServices, trackingType, listStatusFilter, listSearch])
 
-  // 期程進度達 2/3 且尚未結案的提醒
+  // 專業服務：期程進度達 2/3 且尚未結案的提醒／輔具：單號到期前 N 天內的提醒
   const dueReminders = useMemo(() => {
     return professionalServices.filter(r => {
       if (r.status !== 'active') return false
       if (serviceReminderDismissed[r.id]) return false
+      if (getType(r) === 'device') return isDeviceRenewalDue(r)
       const progress = getServicePeriodProgress(r)
       return progress !== null && progress >= SERVICE_PERIOD_REMINDER_THRESHOLD
     })
@@ -102,19 +134,22 @@ function ProfessionalServiceContent() {
 
   const handleSave = async () => {
     if (!selectedCase) { setError('請選擇個案'); return }
-    if (!serviceName.trim()) { setError('請填寫服務項目'); return }
-    if (!startDate || !endDate) { setError('請填寫計劃期程起訖日期'); return }
+    if (!serviceName.trim()) { setError(isDevice ? '請填寫輔具名稱' : '請填寫服務項目'); return }
+    if (!startDate || !endDate) { setError(isDevice ? '請填寫單號核發日期' : '請填寫計劃期程起訖日期'); return }
     if (endDate < startDate) { setError('結束日期不可早於起始日期'); return }
+    if (isDevice && !orderNumber.trim()) { setError('請填寫輔具單號'); return }
     setSaving(true)
     setError('')
     const record: ProfessionalServiceRecord = {
       id: Date.now().toString(),
       caseId: selectedCase.id,
       caseName: selectedCase.name,
+      trackingType,
       serviceName: serviceName.trim(),
       goal: goal.trim(),
       startDate,
       endDate,
+      orderNumber: isDevice ? orderNumber.trim() : undefined,
       plannedSessions: Number(plannedSessions) || 0,
       completedSessions: 0,
       status: 'active',
@@ -134,10 +169,12 @@ function ProfessionalServiceContent() {
             caseName: selectedCase.name,
             caseNumber: selectedCase.caseNumber,
             idNumber: selectedCase.idNumber,
+            trackingType: record.trackingType,
             serviceName: record.serviceName,
             goal: record.goal,
             startDate: record.startDate,
             endDate: record.endDate,
+            orderNumber: record.orderNumber || '',
             plannedSessions: record.plannedSessions,
             completedSessions: record.completedSessions,
             status: record.status,
@@ -145,7 +182,7 @@ function ProfessionalServiceContent() {
           },
         },
         kind: 'professionalService',
-        label: `專業服務追蹤：${selectedCase.name}（${record.serviceName}）`,
+        label: `${TRACKING_TYPE_LABEL[trackingType]}追蹤：${selectedCase.name}（${record.serviceName}）`,
       })
       if (!data.synced) {
         setError(`已儲存在本機，但雲端同步失敗${data.error ? '：' + data.error : ''}。可至「同步狀態」頁面重新送出。`)
@@ -167,13 +204,20 @@ function ProfessionalServiceContent() {
         action: 'updateProfessionalService',
         params: { sheetName: settings.professionalServiceSheetName || '專業服務追蹤紀錄', id: record.id, fields },
         kind: 'professionalService',
-        label: `專業服務追蹤更新：${record.caseName}（${record.serviceName}）`,
+        label: `${TRACKING_TYPE_LABEL[getType(record)]}追蹤更新：${record.caseName}（${record.serviceName}）`,
       })
     }
   }
 
+  // 輔具換單號：帶入新的核發日＋單號，到期日自動重算為新核發日＋6個月
+  const handleRenewDevice = (record: ProfessionalServiceRecord, newOrderNumber: string, newStartDate: string) => {
+    const newEndDate = addMonths(newStartDate, DEVICE_RENEWAL_MONTHS)
+    handleFieldChange(record, { orderNumber: newOrderNumber, startDate: newStartDate, endDate: newEndDate })
+    dismissServiceReminder(record.id)
+  }
+
   const handleDelete = (id: string) => {
-    if (!confirm('確定要刪除這筆專業服務追蹤紀錄嗎？（僅刪除本機紀錄，雲端 Sheet 資料需自行至分頁刪除）')) return
+    if (!confirm('確定要刪除這筆追蹤紀錄嗎？（僅刪除本機紀錄，雲端 Sheet 資料需自行至分頁刪除）')) return
     deleteProfessionalService(id)
   }
 
@@ -181,42 +225,64 @@ function ProfessionalServiceContent() {
 
   return (
     <div className="max-w-6xl">
-      <h2 className="text-2xl font-bold text-gray-800 mb-6">專業服務追蹤</h2>
+      <h2 className="text-2xl font-bold text-gray-800 mb-4">專業服務/輔具追蹤</h2>
+
+      <div className="flex gap-1 mb-4">
+        {TRACKING_TYPE_ORDER.map(t => (
+          <button
+            key={t}
+            onClick={() => handleSelectType(t)}
+            className={`px-4 py-1.5 text-sm rounded-lg border transition-colors ${
+              trackingType === t
+                ? 'bg-[#7a9985] text-white border-[#7a9985]'
+                : 'bg-white text-gray-600 border-gray-200 hover:border-[#a3bcaa]'
+            }`}
+          >
+            {TRACKING_TYPE_LABEL[t]}
+          </button>
+        ))}
+      </div>
 
       {dueReminders.length > 0 && (
         <div className="mb-4 bg-[#fdf2e3] border border-[#e8c79a] rounded-xl px-4 py-3">
-          <p className="text-sm font-medium text-[#8a5a1f] mb-2">⚠️ 計劃期程已達 2/3，請留意服務進度與後續安排</p>
+          <p className="text-sm font-medium text-[#8a5a1f] mb-2">
+            ⚠️ {isDevice ? `輔具單號即將到期（到期前 ${DEVICE_RENEWAL_REMINDER_DAYS} 天內），請留意換單號` : '計劃期程已達 2/3，請留意服務進度與後續安排'}
+          </p>
           <div className="space-y-1.5">
-            {dueReminders.map(r => (
-              <div key={r.id} className="flex items-center justify-between text-sm">
-                <button
-                  onClick={() => handleSelectCase(r.caseId)}
-                  className="text-[#8a5a1f] hover:underline text-left"
-                >
-                  {r.caseName}－{r.serviceName}（期程：{formatDateOnly(r.startDate)} ～ {formatDateOnly(r.endDate)}，已完成 {r.completedSessions}
-                  {r.plannedSessions ? `/${r.plannedSessions}` : ''} 次）
-                </button>
-                <button
-                  onClick={() => dismissServiceReminder(r.id)}
-                  className="text-xs text-[#8a5a1f]/70 hover:text-[#8a5a1f] px-2 py-0.5 rounded border border-[#e8c79a] hover:bg-[#f5e2c2] flex-shrink-0 ml-3"
-                >
-                  知道了
-                </button>
-              </div>
-            ))}
+            {dueReminders.filter(r => getType(r) === trackingType).map(r => {
+              const daysLeft = getDeviceRenewalDaysLeft(r)
+              return (
+                <div key={r.id} className="flex items-center justify-between text-sm">
+                  <button
+                    onClick={() => handleSelectCase(r.caseId)}
+                    className="text-[#8a5a1f] hover:underline text-left"
+                  >
+                    {isDevice
+                      ? `${r.caseName}－${r.serviceName}（單號：${r.orderNumber || '無'}，到期：${formatDateOnly(r.endDate)}，${daysLeft !== null && daysLeft < 0 ? `已逾期 ${-daysLeft} 天` : `剩 ${daysLeft} 天`}）`
+                      : `${r.caseName}－${r.serviceName}（期程：${formatDateOnly(r.startDate)} ～ ${formatDateOnly(r.endDate)}，已完成 ${r.completedSessions}${r.plannedSessions ? `/${r.plannedSessions}` : ''} 次）`}
+                  </button>
+                  <button
+                    onClick={() => dismissServiceReminder(r.id)}
+                    className="text-xs text-[#8a5a1f]/70 hover:text-[#8a5a1f] px-2 py-0.5 rounded border border-[#e8c79a] hover:bg-[#f5e2c2] flex-shrink-0 ml-3"
+                  >
+                    知道了
+                  </button>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
 
       <div className="bg-white rounded-xl border border-gray-100 p-4 mb-6">
         <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
-          <h3 className="font-semibold text-gray-700">全部個案服務清單</h3>
+          <h3 className="font-semibold text-gray-700">全部個案{TRACKING_TYPE_LABEL[trackingType]}清單</h3>
           <div className="flex items-center gap-2 flex-wrap">
             <input
               type="text"
               value={listSearch}
               onChange={e => setListSearch(e.target.value)}
-              placeholder="搜尋個案 / 服務項目…"
+              placeholder={isDevice ? '搜尋個案 / 輔具名稱 / 單號…' : '搜尋個案 / 服務項目…'}
               className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
             />
             <div className="flex gap-1">
@@ -238,24 +304,26 @@ function ProfessionalServiceContent() {
         </div>
 
         {allServiceRows.length === 0 ? (
-          <p className="text-sm text-gray-400 py-4 text-center">沒有符合條件的服務紀錄</p>
+          <p className="text-sm text-gray-400 py-4 text-center">沒有符合條件的{TRACKING_TYPE_LABEL[trackingType]}紀錄</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-gray-400 border-b border-gray-100">
                   <th className="py-2 pr-3 font-medium">個案</th>
-                  <th className="py-2 pr-3 font-medium">服務項目</th>
+                  <th className="py-2 pr-3 font-medium">{isDevice ? '輔具名稱' : '服務項目'}</th>
+                  {isDevice && <th className="py-2 pr-3 font-medium">單號</th>}
                   <th className="py-2 pr-3 font-medium">狀態</th>
-                  <th className="py-2 pr-3 font-medium">計劃期程</th>
-                  <th className="py-2 pr-3 font-medium">期程進度</th>
-                  <th className="py-2 pr-3 font-medium">完成次數</th>
+                  <th className="py-2 pr-3 font-medium">{isDevice ? '核發／到期日' : '計劃期程'}</th>
+                  <th className="py-2 pr-3 font-medium">{isDevice ? '剩餘天數' : '期程進度'}</th>
+                  {!isDevice && <th className="py-2 pr-3 font-medium">完成次數</th>}
                 </tr>
               </thead>
               <tbody>
                 {allServiceRows.map(r => {
                   const progress = getServicePeriodProgress(r)
-                  const isDue = r.status === 'active' && progress !== null && progress >= SERVICE_PERIOD_REMINDER_THRESHOLD
+                  const daysLeft = getDeviceRenewalDaysLeft(r)
+                  const isDue = r.status === 'active' && (isDevice ? isDeviceRenewalDue(r) : (progress !== null && progress >= SERVICE_PERIOD_REMINDER_THRESHOLD))
                   return (
                     <tr key={r.id} className="border-b border-gray-50 last:border-0">
                       <td className="py-2 pr-3">
@@ -267,6 +335,7 @@ function ProfessionalServiceContent() {
                         </button>
                       </td>
                       <td className="py-2 pr-3 text-gray-700">{r.serviceName}</td>
+                      {isDevice && <td className="py-2 pr-3 text-gray-500 text-xs">{r.orderNumber || '－'}</td>}
                       <td className="py-2 pr-3">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[r.status]}`}>
                           {STATUS_LABELS[r.status]}
@@ -274,7 +343,15 @@ function ProfessionalServiceContent() {
                       </td>
                       <td className="py-2 pr-3 text-gray-500 text-xs whitespace-nowrap">{formatDateOnly(r.startDate)} ～ {formatDateOnly(r.endDate)}</td>
                       <td className="py-2 pr-3 text-xs">
-                        {progress === null ? (
+                        {isDevice ? (
+                          daysLeft === null ? (
+                            <span className="text-gray-300">－</span>
+                          ) : (
+                            <span className={isDue ? 'text-[#8a5a1f] font-medium' : 'text-gray-500'}>
+                              {daysLeft < 0 ? `已逾期 ${-daysLeft} 天` : `${daysLeft} 天`}{isDue ? ' ⚠' : ''}
+                            </span>
+                          )
+                        ) : progress === null ? (
                           <span className="text-gray-300">－</span>
                         ) : (
                           <span className={isDue ? 'text-[#8a5a1f] font-medium' : 'text-gray-500'}>
@@ -282,9 +359,11 @@ function ProfessionalServiceContent() {
                           </span>
                         )}
                       </td>
-                      <td className="py-2 pr-3 text-gray-500 text-xs whitespace-nowrap">
-                        {r.completedSessions}{r.plannedSessions ? ` / ${r.plannedSessions}` : ''}
-                      </td>
+                      {!isDevice && (
+                        <td className="py-2 pr-3 text-gray-500 text-xs whitespace-nowrap">
+                          {r.completedSessions}{r.plannedSessions ? ` / ${r.plannedSessions}` : ''}
+                        </td>
+                      )}
                     </tr>
                   )
                 })}
@@ -334,7 +413,7 @@ function ProfessionalServiceContent() {
                 <p className="text-xs text-[#7a9985]/70 mt-0.5">編號：{selectedCase.caseNumber}</p>
               )}
               {records.length > 0 && (
-                <p className="text-xs text-[#7a9985]/50 mt-1.5">共 {records.length} 筆追蹤紀錄</p>
+                <p className="text-xs text-[#7a9985]/50 mt-1.5">共 {records.length} 筆{TRACKING_TYPE_LABEL[trackingType]}追蹤紀錄</p>
               )}
             </div>
           )}
@@ -343,7 +422,7 @@ function ProfessionalServiceContent() {
             <div className="bg-white rounded-xl border border-gray-100 p-4">
               <p className="text-sm font-semibold text-gray-700 mb-3">追蹤紀錄</p>
               {records.length === 0 ? (
-                <p className="text-xs text-gray-400">尚無專業服務追蹤紀錄</p>
+                <p className="text-xs text-gray-400">尚無{TRACKING_TYPE_LABEL[trackingType]}追蹤紀錄</p>
               ) : (
                 <div className="space-y-3">
                   {records.map(r => (
@@ -352,6 +431,7 @@ function ProfessionalServiceContent() {
                       record={r}
                       onChange={fields => handleFieldChange(r, fields)}
                       onDelete={() => handleDelete(r.id)}
+                      onRenewDevice={(orderNo, startD) => handleRenewDevice(r, orderNo, startD)}
                     />
                   ))}
                 </div>
@@ -369,59 +449,75 @@ function ProfessionalServiceContent() {
           ) : (
             <>
               <div className="bg-white rounded-xl border border-gray-100 p-4">
-                <label className="block text-sm font-semibold text-gray-700 mb-1">服務項目</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">{isDevice ? '輔具名稱' : '服務項目'}</label>
                 <input
                   type="text"
                   value={serviceName}
                   onChange={e => setServiceName(e.target.value)}
-                  placeholder="例：職能治療、物理治療、營養衛教…"
+                  placeholder={isDevice ? '例：爬梯機' : '例：職能治療、物理治療、營養衛教…'}
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
                 />
               </div>
 
-              <div className="bg-white rounded-xl border border-gray-100 p-4">
-                <label className="block text-sm font-semibold text-gray-700 mb-1">服務目標</label>
-                <textarea
-                  value={goal}
-                  onChange={e => setGoal(e.target.value)}
-                  rows={3}
-                  placeholder="請描述此次專業服務欲達成之目標…"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa] resize-none"
-                />
-              </div>
+              {isDevice ? (
+                <div className="bg-white rounded-xl border border-gray-100 p-4">
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">輔具單號</label>
+                  <input
+                    type="text"
+                    value={orderNumber}
+                    onChange={e => setOrderNumber(e.target.value)}
+                    placeholder="請輸入本次核發之單號"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
+                  />
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl border border-gray-100 p-4">
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">服務目標</label>
+                  <textarea
+                    value={goal}
+                    onChange={e => setGoal(e.target.value)}
+                    rows={3}
+                    placeholder="請描述此次專業服務欲達成之目標…"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa] resize-none"
+                  />
+                </div>
+              )}
 
               <div className="bg-white rounded-xl border border-gray-100 p-4 grid grid-cols-3 gap-4">
                 <div className="col-span-2 grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">計劃期程起</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">{isDevice ? '單號核發日' : '計劃期程起'}</label>
                     <input
                       type="date"
                       value={startDate}
-                      onChange={e => setStartDate(e.target.value)}
+                      onChange={e => isDevice ? handleDeviceStartDateChange(e.target.value) : setStartDate(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">計劃期程迄</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">{isDevice ? '單號到期日' : '計劃期程迄'}</label>
                     <input
                       type="date"
                       value={endDate}
                       onChange={e => setEndDate(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
                     />
+                    {isDevice && <p className="text-xs text-gray-400 mt-1">預設為核發日＋{DEVICE_RENEWAL_MONTHS}個月，可手動調整</p>}
                   </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">規劃次數</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={plannedSessions}
-                    onChange={e => setPlannedSessions(e.target.value)}
-                    placeholder="次"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
-                  />
-                </div>
+                {!isDevice && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">規劃次數</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={plannedSessions}
+                      onChange={e => setPlannedSessions(e.target.value)}
+                      placeholder="次"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="bg-white rounded-xl border border-gray-100 p-4">
@@ -456,19 +552,26 @@ function ProfessionalServiceContent() {
   )
 }
 
-function ServiceHistoryItem({ record, onChange, onDelete }: {
+function ServiceHistoryItem({ record, onChange, onDelete, onRenewDevice }: {
   record: ProfessionalServiceRecord
   onChange: (fields: Partial<ProfessionalServiceRecord>) => void
   onDelete: () => void
+  onRenewDevice: (orderNumber: string, startDate: string) => void
 }) {
   const [notes, setNotes] = useState(record.notes)
   useEffect(() => { setNotes(record.notes) }, [record.notes])
 
+  const isDevice = getType(record) === 'device'
   const progress = getServicePeriodProgress(record)
-  const isDue = record.status === 'active' && progress !== null && progress >= SERVICE_PERIOD_REMINDER_THRESHOLD
+  const daysLeft = getDeviceRenewalDaysLeft(record)
+  const isDue = record.status === 'active' && (isDevice ? isDeviceRenewalDue(record) : (progress !== null && progress >= SERVICE_PERIOD_REMINDER_THRESHOLD))
   const sessionPct = record.plannedSessions > 0
     ? Math.min(100, Math.round((record.completedSessions / record.plannedSessions) * 100))
     : null
+
+  const [renewing, setRenewing] = useState(false)
+  const [renewOrderNumber, setRenewOrderNumber] = useState('')
+  const [renewStartDate, setRenewStartDate] = useState(new Date().toISOString().split('T')[0])
 
   return (
     <div className={`border rounded-lg p-3 ${isDue ? 'bg-[#fdf2e3] border-[#e8c79a]' : 'bg-gray-50 border-gray-100'}`}>
@@ -478,11 +581,26 @@ function ServiceHistoryItem({ record, onChange, onDelete }: {
           {STATUS_LABELS[record.status]}
         </span>
       </div>
-      <p className="text-xs text-gray-400 mb-2">{formatDateOnly(record.startDate)} ～ {formatDateOnly(record.endDate)}</p>
 
-      {record.goal && <p className="text-xs text-gray-600 mb-2 whitespace-pre-wrap">🎯 {record.goal}</p>}
+      {isDevice ? (
+        <>
+          <p className="text-xs text-gray-400 mb-1">單號：{record.orderNumber || '無'}</p>
+          <p className="text-xs text-gray-400 mb-2">
+            核發 {formatDateOnly(record.startDate)}　到期 {formatDateOnly(record.endDate)}
+            {daysLeft !== null && (
+              <span className={isDue ? 'text-[#8a5a1f] font-medium' : ''}>
+                {' '}（{daysLeft < 0 ? `已逾期 ${-daysLeft} 天` : `剩 ${daysLeft} 天`}）
+              </span>
+            )}
+          </p>
+        </>
+      ) : (
+        <p className="text-xs text-gray-400 mb-2">{formatDateOnly(record.startDate)} ～ {formatDateOnly(record.endDate)}</p>
+      )}
 
-      {progress !== null && (
+      {!isDevice && record.goal && <p className="text-xs text-gray-600 mb-2 whitespace-pre-wrap">🎯 {record.goal}</p>}
+
+      {!isDevice && progress !== null && (
         <div className="mb-2">
           <div className="flex items-center justify-between text-xs text-gray-400 mb-0.5">
             <span>期程進度</span>
@@ -497,26 +615,76 @@ function ServiceHistoryItem({ record, onChange, onDelete }: {
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-xs text-gray-500">
-          已完成次數：{record.completedSessions}{record.plannedSessions ? ` / ${record.plannedSessions}` : ''}
-          {sessionPct !== null && <span className="text-gray-400">（{sessionPct}%）</span>}
-        </p>
-        <div className="flex gap-1">
-          <button
-            onClick={() => onChange({ completedSessions: Math.max(0, record.completedSessions - 1) })}
-            className="w-6 h-6 flex items-center justify-center rounded border border-gray-200 text-gray-500 hover:bg-white transition-colors"
-          >
-            －
-          </button>
-          <button
-            onClick={() => onChange({ completedSessions: record.completedSessions + 1 })}
-            className="w-6 h-6 flex items-center justify-center rounded border border-[#a3bcaa] text-[#7a9985] hover:bg-white transition-colors"
-          >
-            ＋
-          </button>
+      {!isDevice && (
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs text-gray-500">
+            已完成次數：{record.completedSessions}{record.plannedSessions ? ` / ${record.plannedSessions}` : ''}
+            {sessionPct !== null && <span className="text-gray-400">（{sessionPct}%）</span>}
+          </p>
+          <div className="flex gap-1">
+            <button
+              onClick={() => onChange({ completedSessions: Math.max(0, record.completedSessions - 1) })}
+              className="w-6 h-6 flex items-center justify-center rounded border border-gray-200 text-gray-500 hover:bg-white transition-colors"
+            >
+              －
+            </button>
+            <button
+              onClick={() => onChange({ completedSessions: record.completedSessions + 1 })}
+              className="w-6 h-6 flex items-center justify-center rounded border border-[#a3bcaa] text-[#7a9985] hover:bg-white transition-colors"
+            >
+              ＋
+            </button>
+          </div>
         </div>
-      </div>
+      )}
+
+      {isDevice && (
+        <div className="mb-2">
+          {!renewing ? (
+            <button
+              onClick={() => { setRenewing(true); setRenewOrderNumber(''); setRenewStartDate(new Date().toISOString().split('T')[0]) }}
+              className="text-xs px-2 py-1 rounded-lg border border-[#a3bcaa] text-[#7a9985] hover:bg-white transition-colors"
+            >
+              換單號 / 續證
+            </button>
+          ) : (
+            <div className="bg-white border border-gray-200 rounded-lg p-2 space-y-1.5">
+              <input
+                type="text"
+                value={renewOrderNumber}
+                onChange={e => setRenewOrderNumber(e.target.value)}
+                placeholder="新單號"
+                className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#a3bcaa]"
+              />
+              <input
+                type="date"
+                value={renewStartDate}
+                onChange={e => setRenewStartDate(e.target.value)}
+                className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#a3bcaa]"
+              />
+              <p className="text-xs text-gray-400">新到期日：{addMonths(renewStartDate, DEVICE_RENEWAL_MONTHS) || '－'}</p>
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => {
+                    if (!renewOrderNumber.trim()) return
+                    onRenewDevice(renewOrderNumber.trim(), renewStartDate)
+                    setRenewing(false)
+                  }}
+                  className="flex-1 py-1 bg-[#7a9985] text-white rounded text-xs hover:bg-[#50665b] transition-colors"
+                >
+                  確認換單
+                </button>
+                <button
+                  onClick={() => setRenewing(false)}
+                  className="px-2 py-1 border border-gray-200 rounded text-xs text-gray-500 hover:bg-gray-50 transition-colors"
+                >
+                  取消
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-1.5 mb-2">
         {STATUS_ORDER.map(s => (

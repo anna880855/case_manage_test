@@ -147,22 +147,46 @@ export const EMPTY_REFERRAL_TRACKING = {
 
 export type ProfessionalServiceStatus = 'active' | 'completed' | 'stopped'
 
+// 追蹤類型：專業服務（依期程進度提醒）／輔具（依單號到期日提醒，如爬梯機每半年須換單號）
+export type TrackingType = 'professional' | 'device'
+
+export const TRACKING_TYPE_LABEL: Record<TrackingType, string> = {
+  professional: '專業服務',
+  device: '輔具',
+}
+
+// 輔具單號效期（月）：核發日 + 6 個月 = 到期日，到期前需重新申請換發單號
+export const DEVICE_RENEWAL_MONTHS = 6
+
+// 輔具單號到期前幾天開始提醒個管師換單號
+export const DEVICE_RENEWAL_REMINDER_DAYS = 7
+
 export interface ProfessionalServiceRecord {
   id: string
   caseId: string
   caseName: string
-  serviceName: string // 服務項目（如：職能治療、物理治療、營養衛教…）
-  goal: string // 服務目標
-  startDate: string // 計劃期程起
-  endDate: string // 計劃期程迄
-  plannedSessions: number // 規劃次數
-  completedSessions: number // 已完成次數
+  trackingType: TrackingType // 未帶值視為 'professional'（沿用舊資料）
+  serviceName: string // 專業服務：服務項目（如：職能治療、物理治療、營養衛教…）／輔具：輔具名稱（如：爬梯機）
+  goal: string // 服務目標（輔具類型通常留空）
+  startDate: string // 專業服務：計劃期程起／輔具：單號核發日
+  endDate: string // 專業服務：計劃期程迄／輔具：單號到期日（核發日＋6個月，自動計算）
+  orderNumber?: string // 輔具單號（僅輔具類型使用）
+  plannedSessions: number // 規劃次數（輔具類型不使用）
+  completedSessions: number // 已完成次數（輔具類型不使用）
   status: ProfessionalServiceStatus
   notes: string
   createdAt: string
 }
 
-// 計算計劃期程進度（0~1），期程時間到達 2/3 時應提醒個管師注意
+// 依「核發日 + n 個月」計算到期日，回傳 yyyy-mm-dd
+export function addMonths(dateStr: string, months: number): string {
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return ''
+  d.setMonth(d.getMonth() + months)
+  return formatDateOnly(d)
+}
+
+// 計算計劃期程進度（0~1），期程時間到達 2/3 時應提醒個管師注意（專業服務類型使用）
 export function getServicePeriodProgress(record: Pick<ProfessionalServiceRecord, 'startDate' | 'endDate'>): number | null {
   if (!record.startDate || !record.endDate) return null
   const start = new Date(record.startDate).getTime()
@@ -173,6 +197,21 @@ export function getServicePeriodProgress(record: Pick<ProfessionalServiceRecord,
 }
 
 export const SERVICE_PERIOD_REMINDER_THRESHOLD = 2 / 3
+
+// 輔具單號距到期日剩餘天數（負值代表已逾期）
+export function getDeviceRenewalDaysLeft(record: Pick<ProfessionalServiceRecord, 'endDate'>): number | null {
+  if (!record.endDate) return null
+  const end = new Date(record.endDate).getTime()
+  if (isNaN(end)) return null
+  const oneDay = 24 * 60 * 60 * 1000
+  return Math.ceil((end - Date.now()) / oneDay)
+}
+
+// 輔具單號是否已進入提醒區間（到期前 DEVICE_RENEWAL_REMINDER_DAYS 天內，含已逾期）
+export function isDeviceRenewalDue(record: Pick<ProfessionalServiceRecord, 'endDate'>): boolean {
+  const daysLeft = getDeviceRenewalDaysLeft(record)
+  return daysLeft !== null && daysLeft <= DEVICE_RENEWAL_REMINDER_DAYS
+}
 
 // 統一將日期字串顯示為 yyyy-mm-dd，無法解析時原樣回傳
 export function formatDateOnly(value?: string | Date | null): string {

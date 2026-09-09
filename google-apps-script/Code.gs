@@ -447,13 +447,20 @@ const REFERRAL_HEADERS = [
 const REFERRAL_TRACKING_LABEL = { pending: '待回覆', accepted: '已提供服務', declined: '無法提供服務' };
 const REFERRAL_TRACKING_REVERSE = { '待回覆': 'pending', '已提供服務': 'accepted', '無法提供服務': 'declined' };
 
+// 欄位14「類型」、15「單號」是後補欄位，接在原本13欄之後，避免打亂既有欄位索引；
+// 舊資料沒有這兩欄時視為「專業服務」、單號空白
 const PROFESSIONAL_SERVICE_HEADERS = [
   '個案姓名', '個案編號', '身分證字號', '服務項目', '服務目標',
   '期程起', '期程迄', '規劃次數', '已完成次數', '狀態', '備註', '建立時間', '本機ID',
+  '類型', '單號',
 ];
 
 const PROFESSIONAL_SERVICE_STATUS_LABEL = { active: '進行中', completed: '已完成', stopped: '已中止' };
 const PROFESSIONAL_SERVICE_STATUS_REVERSE = { '進行中': 'active', '已完成': 'completed', '已中止': 'stopped' };
+
+// 追蹤類型：'professional'=專業服務（依期程進度提醒），'device'=輔具（如爬梯機，依單號到期日提醒）
+const TRACKING_TYPE_LABEL = { professional: '專業服務', device: '輔具' };
+const TRACKING_TYPE_REVERSE = { '專業服務': 'professional', '輔具': 'device' };
 
 function getOrCreateVisitSheet(sheetName, headers) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -536,6 +543,7 @@ function appendVisitRow(sheetName, record) {
       record.plannedSessions || 0, record.completedSessions || 0,
       PROFESSIONAL_SERVICE_STATUS_LABEL[record.status] || PROFESSIONAL_SERVICE_STATUS_LABEL.active,
       record.notes || '', new Date(), record.id || '',
+      TRACKING_TYPE_LABEL[record.trackingType] || TRACKING_TYPE_LABEL.professional, record.orderNumber || '',
     ]);
     return;
   }
@@ -718,10 +726,12 @@ function getProfessionalServiceRows(sheetName) {
         id: String(row[12] || ''),
         caseId: String(row[1] || ''),
         caseName: String(row[0] || ''),
+        trackingType: TRACKING_TYPE_REVERSE[String(row[13] || '')] || 'professional',
         serviceName: String(row[3] || ''),
         goal: String(row[4] || ''),
         startDate: toLocalDateStr(row[5]),
         endDate: toLocalDateStr(row[6]),
+        orderNumber: String(row[14] || ''),
         plannedSessions: Number(row[7]) || 0,
         completedSessions: Number(row[8]) || 0,
         status: PROFESSIONAL_SERVICE_STATUS_REVERSE[String(row[9] || '')] || 'active',
@@ -739,11 +749,14 @@ function updateProfessionalServiceRow(sheetName, id, fields) {
   const data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][12] || '') === id) {
+      if (fields.startDate !== undefined) sheet.getRange(i + 1, 6).setValue(fields.startDate);
+      if (fields.endDate !== undefined) sheet.getRange(i + 1, 7).setValue(fields.endDate);
       if (fields.completedSessions !== undefined) sheet.getRange(i + 1, 9).setValue(fields.completedSessions);
       if (fields.status !== undefined) {
         sheet.getRange(i + 1, 10).setValue(PROFESSIONAL_SERVICE_STATUS_LABEL[fields.status] || PROFESSIONAL_SERVICE_STATUS_LABEL.active);
       }
       if (fields.notes !== undefined) sheet.getRange(i + 1, 11).setValue(fields.notes);
+      if (fields.orderNumber !== undefined) sheet.getRange(i + 1, 15).setValue(fields.orderNumber);
       return;
     }
   }

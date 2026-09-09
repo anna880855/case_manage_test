@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useStore } from '@/lib/store'
 import { syncToAppsScript } from '@/lib/sync'
 import type { Case } from '@/lib/types'
-import { getServicePeriodProgress, SERVICE_PERIOD_REMINDER_THRESHOLD, formatDateOnly } from '@/lib/types'
+import { getServicePeriodProgress, SERVICE_PERIOD_REMINDER_THRESHOLD, formatDateOnly, DEVICE_RENEWAL_REMINDER_DAYS, getDeviceRenewalDaysLeft, isDeviceRenewalDue } from '@/lib/types'
 
 const STATUS_LABEL: Record<string, string> = {
   active: '在案',
@@ -359,10 +359,20 @@ export default function HomePage() {
 
   const dueProfessionalServices = useMemo(() => {
     return professionalServices.filter(r => {
+      if ((r.trackingType || 'professional') !== 'professional') return false
       if (r.status !== 'active') return false
       if (serviceReminderDismissed[r.id]) return false
       const progress = getServicePeriodProgress(r)
       return progress !== null && progress >= SERVICE_PERIOD_REMINDER_THRESHOLD
+    })
+  }, [professionalServices, serviceReminderDismissed])
+
+  const dueDeviceRenewals = useMemo(() => {
+    return professionalServices.filter(r => {
+      if (r.trackingType !== 'device') return false
+      if (r.status !== 'active') return false
+      if (serviceReminderDismissed[r.id]) return false
+      return isDeviceRenewalDue(r)
     })
   }, [professionalServices, serviceReminderDismissed])
 
@@ -509,6 +519,30 @@ export default function HomePage() {
                 </button>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {dueDeviceRenewals.length > 0 && (
+        <div className="mb-4 bg-[#fdf2e3] border border-[#e8c79a] rounded-xl px-4 py-3">
+          <p className="text-sm font-medium text-[#8a5a1f] mb-2">⚠️ 輔具單號即將到期（到期前 {DEVICE_RENEWAL_REMINDER_DAYS} 天內），請留意換單號</p>
+          <div className="space-y-1.5">
+            {dueDeviceRenewals.map(r => {
+              const daysLeft = getDeviceRenewalDaysLeft(r)
+              return (
+                <div key={r.id} className="flex items-center justify-between text-sm">
+                  <Link href={`/professional-service?caseId=${r.caseId}`} className="text-[#8a5a1f] hover:underline">
+                    {r.caseName}－{r.serviceName}（單號：{r.orderNumber || '無'}，到期：{r.endDate}，{daysLeft !== null && daysLeft < 0 ? `已逾期 ${-daysLeft} 天` : `剩 ${daysLeft} 天`}）
+                  </Link>
+                  <button
+                    onClick={() => dismissServiceReminder(r.id)}
+                    className="text-xs text-[#8a5a1f]/70 hover:text-[#8a5a1f] px-2 py-0.5 rounded border border-[#e8c79a] hover:bg-[#f5e2c2]"
+                  >
+                    知道了
+                  </button>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
