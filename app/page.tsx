@@ -651,7 +651,7 @@ function CaseRow({ case_: c, visitFilter }: { case_: Case; visitFilter: VisitFil
           </p>
         )}
         {c.notes && (
-          <p className="mt-1 text-xs text-amber-700 bg-amber-50 rounded px-2 py-1 whitespace-pre-wrap line-clamp-3">
+          <p className="mt-1 text-xs text-amber-700 bg-amber-50 rounded px-2 py-1 truncate">
             📌 {c.notes}
           </p>
         )}
