@@ -404,12 +404,6 @@ function PhoneVisitContent() {
     queryMonthlyVisit()
   }, [mounted, selectedCaseId, date])
 
-  const applyPrevPlanBlock = () => {
-    if (!selectedCaseId) return
-    const { content } = getLatestVisitSource(selectedCaseId)
-    if (content) setPlanBlock(parsePlanBlock(content))
-  }
-
   const applyPrevGoalBlock = () => {
     if (!selectedCaseId) return
     const { content } = getLatestVisitSource(selectedCaseId)
@@ -875,19 +869,10 @@ function PhoneVisitContent() {
 
           {/* 服務計劃內容追蹤 */}
           <div className="bg-white rounded-xl border border-gray-100 p-4">
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-semibold text-gray-700">
-                服務計劃內容追蹤
-                <span className="font-normal text-gray-400 ml-1">（可套用上次電訪內容並修改）</span>
-              </label>
-              <button
-                onClick={applyPrevPlanBlock}
-                disabled={!selectedCaseId || getPhoneVisitsByCase(selectedCaseId).length === 0}
-                className="text-xs text-gray-400 hover:text-[#7a9985] border border-gray-200 hover:border-[#a3bcaa] rounded px-2 py-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                套用上次內容
-              </button>
-            </div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              服務計劃內容追蹤
+              <span className="font-normal text-gray-400 ml-1">（已自動帶入上次電訪內容，可直接修改）</span>
+            </label>
             <div className="space-y-2">
               {PLAN_KEYS.map(key => (
                 <div key={key}>
