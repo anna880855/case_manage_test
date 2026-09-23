@@ -404,14 +404,6 @@ function PhoneVisitContent() {
     queryMonthlyVisit()
   }, [mounted, selectedCaseId, date])
 
-  const applyPrevGoalBlock = () => {
-    if (!selectedCaseId) return
-    const { content } = getLatestVisitSource(selectedCaseId)
-    if (content) setGoalTracking(parseGoalBlock(content))
-  }
-
-  const hasPrevVisit = (caseId: string) => getLatestVisitSource(caseId).hasPrev
-
   const pickedSentences = CATEGORIES
     .filter(cat => picked[cat])
     .map(cat => ({ category: CATEGORY_LABELS[cat], text: picked[cat] }))
@@ -816,16 +808,7 @@ function PhoneVisitContent() {
           {/* 目標追蹤 */}
           {selectedCase && (selectedCase.shortGoal || selectedCase.midGoal || selectedCase.longGoal) && (
             <div className="bg-white rounded-xl border border-gray-100 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-gray-700">目標追蹤進度</h3>
-                <button
-                  onClick={applyPrevGoalBlock}
-                  disabled={!selectedCaseId || !hasPrevVisit(selectedCaseId)}
-                  className="text-xs text-gray-400 hover:text-[#7a9985] border border-gray-200 hover:border-[#a3bcaa] rounded px-2 py-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  套用上次內容
-                </button>
-              </div>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">目標追蹤進度</h3>
               <div className="space-y-3">
                 {(['short', 'mid', 'long'] as GoalKey[]).map(key => {
                   const goalText = key === 'short' ? selectedCase.shortGoal : key === 'mid' ? selectedCase.midGoal : selectedCase.longGoal
