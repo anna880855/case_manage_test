@@ -181,18 +181,27 @@ function PhoneVisitContent() {
     return arr[Math.floor(Math.random() * arr.length)]?.text || ''
   }
 
-  const autoSelect = (caseObj?: Case) => {
+  // 個案常同時有兩種以上服務項目（例如日照+交通+居家），預設會用個案已勾選的全部服務項目去配對句型；
+  // 若使用者想指定這次電訪只針對其中一項，可透過 visitServiceType narrow down。
+  const [visitServiceType, setVisitServiceType] = useState('')
+
+  // 服務使用句型只能比對「個案實際勾選的服務項目」（forServiceType 指定其中一項時，只用那一項）；
+  // 完全比對不到（例如個案沒勾任何服務）才退回通用句，絕不可退回到「全部服務類型混在一起」的 pool，
+  // 否則沒勾日照的個案也可能抽到日照專用句子（曾發生過的實際問題）
+  const serviceSentenceMatches = (sentenceServiceType: string, targetServices: string[]) =>
+    targetServices.some(svc => svc.includes(sentenceServiceType) || sentenceServiceType.includes(svc))
+
+  const autoSelect = (caseObj?: Case, forServiceType?: string) => {
     const newPicked: Record<string, string> = {}
     for (const cat of CATEGORIES) {
       const pool = sentences.filter(s => s.category === cat)
       if (cat === 'service') {
-        // prefer sentences whose serviceType matches a case service; fall back to general sentences (no serviceType)
-        const caseServices = caseObj?.services || []
-        const matched = caseServices.length > 0
-          ? pool.filter(s => s.serviceType && caseServices.some(svc => svc.includes(s.serviceType!) || s.serviceType!.includes(svc)))
+        const targetServices = forServiceType ? [forServiceType] : (caseObj?.services || [])
+        const matched = targetServices.length > 0
+          ? pool.filter(s => s.serviceType && serviceSentenceMatches(s.serviceType, targetServices))
           : []
         const general = pool.filter(s => !s.serviceType)
-        const preferred = matched.length > 0 ? matched : general.length > 0 ? general : pool
+        const preferred = matched.length > 0 ? matched : general
         newPicked[cat] = pickRandom(preferred)
       } else {
         newPicked[cat] = pickRandom(pool)
@@ -240,12 +249,12 @@ function PhoneVisitContent() {
   const swapOne = (cat: string) => {
     const pool = sentences.filter(s => s.category === cat)
     if (cat === 'service') {
-      const caseServices = selectedCase?.services || []
-      const matched = caseServices.length > 0
-        ? pool.filter(s => s.serviceType && caseServices.some(svc => svc.includes(s.serviceType!) || s.serviceType!.includes(svc)))
+      const targetServices = visitServiceType ? [visitServiceType] : (selectedCase?.services || [])
+      const matched = targetServices.length > 0
+        ? pool.filter(s => s.serviceType && serviceSentenceMatches(s.serviceType, targetServices))
         : []
       const general = pool.filter(s => !s.serviceType)
-      const preferred = matched.length > 0 ? matched : general.length > 0 ? general : pool
+      const preferred = matched.length > 0 ? matched : general
       setPicked(prev => ({ ...prev, [cat]: pickRandom(preferred, prev[cat]) }))
       return
     }
@@ -260,7 +269,14 @@ function PhoneVisitContent() {
     setSaved(false)
     setHb({ ...EMPTY_HEALTH_BUREAU_FIELDS })
     setCustomNote('')
-    autoSelect(c)
+    const defaultService = c?.services?.length === 1 ? c.services[0] : ''
+    setVisitServiceType(defaultService)
+    autoSelect(c, defaultService)
+  }
+
+  const handleVisitServiceTypeChange = (svc: string) => {
+    setVisitServiceType(svc)
+    autoSelect(selectedCase, svc)
   }
 
   // Find the most recent visit for a case, comparing the locally-saved record against
@@ -711,9 +727,26 @@ function PhoneVisitContent() {
               {selectedCase.services && selectedCase.services.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap gap-1">
                   {selectedCase.services.map((s, i) => (
-                    <span key={i} className="text-xs bg-white/60 text-[#7a9985] px-1.5 py-0.5 rounded-full">{s}</span>
+                    selectedCase.services!.length > 1 ? (
+                      <button
+                        key={i}
+                        onClick={() => handleVisitServiceTypeChange(visitServiceType === s ? '' : s)}
+                        className={`text-xs px-1.5 py-0.5 rounded-full transition-colors ${
+                          visitServiceType === s ? 'bg-[#7a9985] text-white' : 'bg-white/60 text-[#7a9985] hover:bg-white'
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    ) : (
+                      <span key={i} className="text-xs bg-white/60 text-[#7a9985] px-1.5 py-0.5 rounded-full">{s}</span>
+                    )
                   ))}
                 </div>
+              )}
+              {selectedCase.services && selectedCase.services.length > 1 && (
+                <p className="text-xs text-[#7a9985]/60 mt-1">
+                  {visitServiceType ? `本次電訪針對：${visitServiceType}` : '目前會從個案已勾選的服務項目中隨機挑選，點選單一項目可指定本次只針對該項服務'}
+                </p>
               )}
               {activeProfServices.length > 0 && (
                 <div className="mt-1.5">
@@ -745,7 +778,7 @@ function PhoneVisitContent() {
                 <p className="text-xs text-gray-400 mt-0.5">四個類別各隨機抽一句，可點「換一句」替換</p>
               </div>
               <button
-                onClick={() => autoSelect(selectedCase)}
+                onClick={() => autoSelect(selectedCase, visitServiceType)}
                 disabled={!hasSentences}
                 className="px-3 py-1.5 text-sm border border-[#a3bcaa] text-[#7a9985] rounded-lg hover:bg-[#e6ede7] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
@@ -1023,15 +1056,6 @@ function PhoneVisitContent() {
                       <span className="text-red-400 ml-1">（必填）</span>
                       {key !== 'otherHandling' && <span className="text-gray-400">（由電訪內容自動帶入，可手動修改）</span>}
                     </label>
-                    {key === 'planAppropriateness' && selectedCase && hb.planAppropriateness && hb.planAppropriateness !== (selectedCase.physicalStatus || '') && (
-                      <button
-                        onClick={() => updateCase(selectedCase.id, { physicalStatus: hb.planAppropriateness })}
-                        className="text-xs px-2.5 py-1 border border-[#a3bcaa] text-[#7a9985] rounded-lg hover:bg-[#e6ede7] transition-colors flex-shrink-0 ml-2"
-                        title="將此內容更新至個案資料，下次電訪及問案文字可自動帶入"
-                      >
-                        ↑ 更新至個案資料
-                      </button>
-                    )}
                   </div>
                   <textarea
                     value={hb[key]}
