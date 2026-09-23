@@ -389,6 +389,15 @@ export default function HomePage() {
     closed: cases.filter(c => c.status === 'closed').length,
   }), [cases])
 
+  // 個案列表預設檢視（未點「本月未電訪」「6個月未家訪」篩選時）優先顯示待訪視的個案，
+  // 不用另外點篩選鈕把其他個案都藏起來才看得到誰還沒訪視
+  const needsVisitIds = useMemo(() => {
+    const s = new Set<string>()
+    noPhoneThisMonth.forEach(c => s.add(c.id))
+    noHomeInSixMonths.forEach(c => s.add(c.id))
+    return s
+  }, [noPhoneThisMonth, noHomeInSixMonths])
+
   const filtered = useMemo(() => {
     let pool = cases
     if (visitFilter === 'no-phone') pool = noPhoneThisMonth
@@ -397,14 +406,18 @@ export default function HomePage() {
     else pool = cases.filter(c => statusFilter === 'all' || c.status === statusFilter)
 
     const q = search.trim().toLowerCase()
-    if (!q) return pool
-    return pool.filter(c =>
-      c.name.includes(q) ||
-      (c.caseNumber || '').includes(q) ||
-      (c.phone || '').includes(q) ||
-      (c.address || '').toLowerCase().includes(q)
-    )
-  }, [cases, search, statusFilter, visitFilter, noPhoneThisMonth, noHomeInSixMonths, casesWithPendingReferral])
+    const result = q
+      ? pool.filter(c =>
+          c.name.includes(q) ||
+          (c.caseNumber || '').includes(q) ||
+          (c.phone || '').includes(q) ||
+          (c.address || '').toLowerCase().includes(q)
+        )
+      : pool
+
+    if (visitFilter !== 'all') return result
+    return [...result].sort((a, b) => Number(needsVisitIds.has(b.id)) - Number(needsVisitIds.has(a.id)))
+  }, [cases, search, statusFilter, visitFilter, noPhoneThisMonth, noHomeInSixMonths, casesWithPendingReferral, needsVisitIds])
 
   if (!mounted) return <div className="text-center py-20 text-gray-400 text-sm">載入中...</div>
 
