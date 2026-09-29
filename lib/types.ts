@@ -28,6 +28,7 @@ export interface Case {
   midGoal?: string
   longGoal?: string
   responsibleWorker?: string
+  serviceScheduleDoc?: string
 }
 
 export interface HealthBureauFields {

@@ -84,18 +84,25 @@ function assemblePhoneVisitContent(narrativeHead: string, goalBlock: string, pla
   return parts.join('\n')
 }
 
-const PLAN_PATTERNS: Record<PlanKey, RegExp> = {
-  care: /照顧及專業服務：([^\n]*)/,
-  transport: /交通接送服務：([^\n]*)/,
-  aids: /輔具及居家無障礙環境改善：([^\n]*)/,
-  respite: /喘息服務：([^\n]*)/,
-  referral: /轉介其他資源：([^\n]*)/,
+const PLAN_ANCHORS: Record<PlanKey, string> = {
+  care: '照顧及專業服務：',
+  transport: '交通接送服務：',
+  aids: '輔具及居家無障礙環境改善：',
+  respite: '喘息服務：',
+  referral: '轉介其他資源：',
 }
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
+// 內容可能是多行文字，用「下一個項目的錨點文字或結尾」界定每一段的範圍，
+// 才能在存回、再帶入下次電訪時保留完整的換行內容。
 function parsePlanBlock(content: string): Record<PlanKey, string> {
   const result = {} as Record<PlanKey, string>
-  for (const key of PLAN_KEYS) {
-    const m = content.match(PLAN_PATTERNS[key])
+  const anchors = PLAN_KEYS.map(k => escapeRegExp(PLAN_ANCHORS[k]))
+  for (let i = 0; i < PLAN_KEYS.length; i++) {
+    const key = PLAN_KEYS[i]
+    const otherAnchors = anchors.filter((_, idx) => idx !== i)
+    const re = new RegExp(anchors[i] + '([\\s\\S]*?)(?=' + otherAnchors.join('|') + '|$)')
+    const m = content.match(re)
     result[key] = m && m[1].trim() ? m[1].trim() : PLAN_DEFAULTS[key]
   }
   return result
@@ -860,10 +867,11 @@ function PhoneVisitContent() {
               {PLAN_KEYS.map(key => (
                 <div key={key}>
                   <label className="block text-xs text-gray-500 mb-1">{PLAN_LABELS[key]}</label>
-                  <input
+                  <textarea
                     value={planBlock[key]}
                     onChange={e => setPlanBlock(p => ({ ...p, [key]: e.target.value }))}
-                    className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
+                    rows={2}
+                    className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa] resize-y"
                   />
                 </div>
               ))}
