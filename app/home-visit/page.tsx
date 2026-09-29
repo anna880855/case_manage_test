@@ -735,6 +735,15 @@ ${problemSection}
     if (caseGenerated) {
       caseUpdate.physicalStatus = caseGenerated
     }
+    // 家訪存檔後，服務問案文字比照照顧目標一併重新產生並存入個案資料，
+    // 個案詳情頁的問案文字也讀同一欄位，開啟即為最新內容，不必再手動重新產生
+    if (services.length > 0) {
+      const scheduleDoc = buildServiceScheduleDoc()
+      if (scheduleDoc) {
+        caseUpdate.serviceScheduleDoc = scheduleDoc
+        setServiceScheduleDoc(scheduleDoc)
+      }
+    }
     // 依本次家訪實際填寫內容，推算個案使用的長照服務大項目（居家照顧／日間照顧／交通車服務／喘息服務）
     const derivedServices = new Set(selectedCase.services || [])
     if (services.some(s => s.category === 'BA')) derivedServices.add('居家照顧')
@@ -827,8 +836,10 @@ ${problemSection}
   }
 
   // ── Service schedule doc
-  const handleGenServiceSchedule = () => {
-    if (!selectedCase) return
+  // 產生「服務時間問案文字」內容，供手動按鈕與家訪存檔後自動更新共用，
+  // 確保存檔當下個案資料裡的問案文字一定反映本次家訪的最新填寫內容。
+  const buildServiceScheduleDoc = () => {
+    if (!selectedCase) return ''
     const birthDate = selectedCase.birthDate
     const age = birthDate
       ? Math.floor((Date.now() - new Date(birthDate).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
@@ -872,7 +883,11 @@ ${problemSection}
 八、個管:${settings.managerName || '林侑萱'}，本次輪派單位0000，請輪派單位於 XX:00前回覆
 九、可承接夥伴可於記事本中留言`
 
-    setServiceScheduleDoc(doc)
+    return doc
+  }
+
+  const handleGenServiceSchedule = () => {
+    setServiceScheduleDoc(buildServiceScheduleDoc())
   }
 
   // ── Service helpers

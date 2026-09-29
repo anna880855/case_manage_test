@@ -553,7 +553,7 @@ function ServiceArrangementSection({ c }: { c: Case }) {
   const [showDropdown, setShowDropdown] = useState(false)
   const [customName, setCustomName] = useState('')
   const [customCat, setCustomCat] = useState<ServiceCategory>('BA')
-  const [serviceDoc, setServiceDoc] = useState('')
+  const [serviceDoc, setServiceDoc] = useState(c.serviceScheduleDoc || '')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [editingStatus, setEditingStatus] = useState(false)
@@ -565,6 +565,12 @@ function ServiceArrangementSection({ c }: { c: Case }) {
   useEffect(() => {
     setServices(c.caseHomeServices || [])
   }, [c.caseHomeServices]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 家訪存檔後會自動重新產生並存入 c.serviceScheduleDoc，這裡同步帶入，
+  // 不必每次都重新點「產生問案文字」
+  useEffect(() => {
+    setServiceDoc(c.serviceScheduleDoc || '')
+  }, [c.serviceScheduleDoc]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const isDirty = JSON.stringify(services) !== JSON.stringify(c.caseHomeServices || []) ||
     physicalStatus !== (c.physicalStatus || '')
@@ -619,6 +625,7 @@ function ServiceArrangementSection({ c }: { c: Case }) {
 八、個管:${settings.managerName || '林侑萱'}，本次輪派單位0000，請輪派單位於 XX:00前回覆
 九、可承接夥伴可於記事本中留言`
     setServiceDoc(doc)
+    updateCase(c.id, { serviceScheduleDoc: doc })
   }
 
   const addFromCatalog = (cat: typeof SERVICE_CATALOG[number]) => {
