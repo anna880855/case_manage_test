@@ -79,6 +79,8 @@ const FIELD_MAP = {
   '身體狀況': 'physicalStatus', '身心狀況': 'physicalStatus', '個案身心狀況': 'physicalStatus',
   // 服務安排
   '服務安排': 'caseHomeServices', '四大包服務': 'caseHomeServices', '照顧服務安排': 'caseHomeServices',
+  // 服務問案文字
+  '服務問案文字': 'serviceScheduleDoc', '問案文字': 'serviceScheduleDoc', '問案文字檔': 'serviceScheduleDoc',
   // 備註
   '備註': 'notes', '備註1': 'notes', '注意事項': 'notes', '備注': 'notes',
   '說明': 'notes', '特殊狀況': 'notes', '其他': 'notes',
