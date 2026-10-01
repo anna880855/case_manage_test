@@ -6,7 +6,7 @@ import { syncToAppsScript } from '@/lib/sync'
 import type { Case, Sentence, HealthBureauFields } from '@/lib/types'
 import { EMPTY_HEALTH_BUREAU_FIELDS, formatDateOnly } from '@/lib/types'
 import { AI_STYLE_GUIDE } from '@/lib/aiStyle'
-import { splitContent, joinWithDivider, parseHealthBureauRow, rocDateToYearMonth } from '@/lib/healthBureauExport'
+import { splitContent, joinWithDivider, parseHealthBureauRow, rocDateToYearMonth, HEALTH_BUREAU_MERGE_DIVIDER } from '@/lib/healthBureauExport'
 
 const CATEGORIES = ['service', 'physical', 'family', 'plan'] as const
 type PhoneCategory = typeof CATEGORIES[number]
@@ -95,15 +95,22 @@ const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 // 內容可能是多行文字，用「下一個項目的錨點文字或結尾」界定每一段的範圍，
 // 才能在存回、再帶入下次電訪時保留完整的換行內容。
+// 錨點前的標題編號（如「二、」）要一併當作邊界，否則編號會被算進上一段內容，
+// 每次帶入再存檔就多疊一個編號；已被污染的舊資料也在這裡把尾端殘留的編號清掉。
+// 同月多筆紀錄以分隔線串接時，只取最後一筆，且最後一項不會吃到分隔線後的內容。
+const PLAN_NUM_PREFIX = '(?:[一二三四五]、)*'
 function parsePlanBlock(content: string): Record<PlanKey, string> {
   const result = {} as Record<PlanKey, string>
+  const blocks = content.split(`\n${HEALTH_BUREAU_MERGE_DIVIDER}\n`)
+  const latest = blocks[blocks.length - 1]
   const anchors = PLAN_KEYS.map(k => escapeRegExp(PLAN_ANCHORS[k]))
   for (let i = 0; i < PLAN_KEYS.length; i++) {
     const key = PLAN_KEYS[i]
     const otherAnchors = anchors.filter((_, idx) => idx !== i)
-    const re = new RegExp(anchors[i] + '([\\s\\S]*?)(?=' + otherAnchors.join('|') + '|$)')
-    const m = content.match(re)
-    result[key] = m && m[1].trim() ? m[1].trim() : PLAN_DEFAULTS[key]
+    const re = new RegExp(anchors[i] + '([\\s\\S]*?)(?=' + PLAN_NUM_PREFIX + '(?:' + otherAnchors.join('|') + ')|$)')
+    const m = latest.match(re)
+    const text = m ? m[1].replace(/(?:\s*[一二三四五]、)+\s*$/, '').trim() : ''
+    result[key] = text || PLAN_DEFAULTS[key]
   }
   return result
 }
