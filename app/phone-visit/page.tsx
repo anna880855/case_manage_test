@@ -42,7 +42,7 @@ function buildPrompt(
 電訪人員：${managerName}
 
 本次電訪重點（請融入以下各項內容，改寫為流暢的第三人稱段落，不要分條列項）：
-${sentenceBlock}
+${sentenceBlock || '（本次未套用固定句型，請以下方補充說明為主）'}
 ${customNote ? `\n補充說明（請一併融入）：${customNote}` : ''}
 
 ${AI_STYLE_GUIDE}
@@ -170,6 +170,8 @@ function PhoneVisitContent() {
   const [saved, setSaved] = useState(false)
   const [caseSearch, setCaseSearch] = useState('')
   const [picked, setPicked] = useState<Record<string, string>>({})
+  // 個案狀況不好時，固定的正向句型不適用，可按「✕」將該類別排除不套用，改由「個案其他狀況補充」自行描述
+  const [excludedCats, setExcludedCats] = useState<string[]>([])
   const [planBlock, setPlanBlock] = useState<Record<PlanKey, string>>({ ...PLAN_DEFAULTS })
 
   const [goalTracking, setGoalTracking] = useState<Record<GoalKey, { status: string; percent: string }>>({ ...EMPTY_GOAL_TRACKING })
@@ -260,7 +262,12 @@ function PhoneVisitContent() {
 
   const hasSentences = CATEGORIES.some(cat => sentences.some(s => s.category === cat))
 
+  const toggleExcluded = (cat: string) => {
+    setExcludedCats(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat])
+  }
+
   const swapOne = (cat: string) => {
+    setExcludedCats(prev => prev.filter(c => c !== cat))
     const pool = sentences.filter(s => s.category === cat)
     if (cat === 'service') {
       const targetServices = visitServiceType ? [visitServiceType] : (selectedCase?.services || [])
@@ -283,6 +290,7 @@ function PhoneVisitContent() {
     setSaved(false)
     setHb({ ...EMPTY_HEALTH_BUREAU_FIELDS })
     setCustomNote('')
+    setExcludedCats([])
     const defaultService = c?.services?.length === 1 ? c.services[0] : ''
     setVisitServiceType(defaultService)
     autoSelect(c, defaultService)
@@ -419,7 +427,7 @@ function PhoneVisitContent() {
   }, [mounted, selectedCaseId, date])
 
   const pickedSentences = CATEGORIES
-    .filter(cat => picked[cat])
+    .filter(cat => picked[cat] && !excludedCats.includes(cat))
     .map(cat => ({ category: CATEGORY_LABELS[cat], text: picked[cat] }))
 
   const buildGoalBlock = () => {
@@ -454,18 +462,18 @@ function PhoneVisitContent() {
 
   const handleQuickCombine = () => {
     if (!selectedCase) { setError('請選擇個案'); return }
-    if (pickedSentences.length === 0) { setError('句型庫為空，請先到「設定」頁面按「重設預設句型庫」'); return }
+    if (pickedSentences.length === 0 && !customNote.trim()) { setError(hasSentences ? '句型已全部排除，請填寫「個案其他狀況補充」' : '句型庫為空，請先到「設定」頁面按「重設預設句型庫」'); return }
     const d = new Date(date)
     const year = d.getFullYear() - 1911
     const month = d.getMonth() + 1
     const day = d.getDate()
     const visitTarget = target || selectedCase.guardian || selectedCase.name
-    const content = pickedSentences.map(s => s.text).join(pickedSentences.length > 1 ? '　' : '')
+    const content = [pickedSentences.map(s => s.text).join('　'), customNote].filter(Boolean).join('　')
     const goalBlock = buildGoalBlock()
     const narrativeHead = [
       `一、電訪日期：民國${year}年${month}月${day}日 ${time}`,
       `二、電訪對象：${visitTarget}`,
-      `三、訪談內容：\n${content}${customNote ? `　${customNote}` : ''}`,
+      `三、訪談內容：\n${content}`,
     ].join('\n')
     const result = assemblePhoneVisitContent(narrativeHead, goalBlock, planBlock)
     setGenerated(monthBaseline ? joinWithDivider([monthBaseline.content, result]) : result)
@@ -477,7 +485,7 @@ function PhoneVisitContent() {
   const handleGenerate = async () => {
     if (!selectedCase) { setError('請選擇個案'); return }
     if (!settings.claudeApiKey) { setError('請先在「設定」頁面填入 Claude API Key'); return }
-    if (pickedSentences.length === 0) { setError('句型庫為空，請先到「設定」頁面新增電訪句型'); return }
+    if (pickedSentences.length === 0 && !customNote.trim()) { setError(hasSentences ? '句型已全部排除，請填寫「個案其他狀況補充」' : '句型庫為空，請先到「設定」頁面新增電訪句型'); return }
     setGenerating(true)
     setError('')
     setGenerated('')
@@ -775,7 +783,7 @@ function PhoneVisitContent() {
             <div className="flex items-center justify-between mb-3">
               <div>
                 <h3 className="font-semibold text-gray-700">本次電訪句型</h3>
-                <p className="text-xs text-gray-400 mt-0.5">四個類別各隨機抽一句，可點「換一句」替換</p>
+                <p className="text-xs text-gray-400 mt-0.5">四個類別各隨機抽一句，可點「換一句」替換；狀況不符可按「✕」本次不套用</p>
               </div>
               <button
                 onClick={() => autoSelect(selectedCase, visitServiceType)}
@@ -795,15 +803,17 @@ function PhoneVisitContent() {
                 {CATEGORIES.map(cat => {
                   const text = picked[cat] || ''
                   const pool = sentences.filter(s => s.category === cat)
+                  const excluded = excludedCats.includes(cat)
                   return (
-                    <div key={cat} className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                    <div key={cat} className={`flex items-start gap-2 p-3 bg-gray-50 rounded-lg border border-gray-100 ${excluded ? 'opacity-50' : ''}`}>
                       <div className="flex-1 min-w-0">
                         <span className="inline-block text-xs font-semibold text-[#7a9985] bg-[#e6ede7] px-1.5 py-0.5 rounded mr-2 mb-1">
                           {CATEGORY_LABELS[cat]}
                         </span>
-                        <span className="text-sm text-gray-700 leading-relaxed">
+                        <span className={`text-sm text-gray-700 leading-relaxed ${excluded ? 'line-through' : ''}`}>
                           {text || <span className="text-gray-400 italic">（無相關句型）</span>}
                         </span>
+                        {excluded && <span className="ml-2 text-xs text-red-400">本次不套用</span>}
                       </div>
                       <button
                         onClick={() => swapOne(cat)}
@@ -811,6 +821,18 @@ function PhoneVisitContent() {
                         className="flex-shrink-0 text-xs text-gray-400 hover:text-[#7a9985] border border-gray-200 hover:border-[#a3bcaa] rounded px-2 py-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         換一句
+                      </button>
+                      <button
+                        onClick={() => toggleExcluded(cat)}
+                        disabled={!text}
+                        title={excluded ? '恢復套用此句' : '本次不套用此句'}
+                        className={`flex-shrink-0 text-xs border rounded px-2 py-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                          excluded
+                            ? 'text-[#7a9985] border-[#a3bcaa] hover:bg-[#e6ede7]'
+                            : 'text-gray-400 border-gray-200 hover:text-red-500 hover:border-red-300'
+                        }`}
+                      >
+                        {excluded ? '恢復' : '✕'}
                       </button>
                     </div>
                   )
@@ -904,14 +926,14 @@ function PhoneVisitContent() {
           <div className="flex gap-3">
             <button
               onClick={handleQuickCombine}
-              disabled={!selectedCaseId || pickedSentences.length === 0 || !hasSentences}
+              disabled={!selectedCaseId || (pickedSentences.length === 0 && !customNote.trim()) || !hasSentences}
               className="flex-1 py-3 bg-white border-2 border-[#7a9985] text-[#7a9985] rounded-xl font-semibold hover:bg-[#e6ede7] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               ⚡ 直接組合
             </button>
             <button
               onClick={handleGenerate}
-              disabled={generating || !selectedCaseId || pickedSentences.length === 0 || !hasSentences}
+              disabled={generating || !selectedCaseId || (pickedSentences.length === 0 && !customNote.trim()) || !hasSentences}
               className="flex-1 py-3 bg-[#7a9985] text-white rounded-xl font-semibold hover:bg-[#50665b] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
             >
               {generating ? (
