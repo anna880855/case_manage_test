@@ -20,6 +20,13 @@ const CATEGORY_LABELS: Record<PhoneCategory, string> = {
 // 目標追蹤、服務計劃這兩段是固定格式的既有資料，不請 AI 覆述——AI 生成的自然語言
 // 無法保證每次都逐字重現固定文字（冒號全形/半形、換行數量都可能跑掉），改由
 // assemblePhoneVisitContent() 在本機把這兩段接在 AI 產生的訪談內容後面，格式才會穩定。
+// 衛生局系統上傳時會吃掉半形空格，「2026-10-15 14:05」會變成「2026-10-1514:05」，
+// 改用「2026年10月15日 14:05」，空格被吃掉時仍可由「日」分隔日期與時間
+function formatVisitDateTime(date: string, time: string): string {
+  const [y, m, d] = date.split('-').map(Number)
+  return `${y}年${m}月${d}日 ${time}`
+}
+
 function buildPrompt(
   c: Case,
   pickedSentences: { category: string; text: string }[],
@@ -495,7 +502,7 @@ function PhoneVisitContent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: buildPrompt(selectedCase, pickedSentences, customNote, target, `${date} ${time}`, settings.managerName),
+          prompt: buildPrompt(selectedCase, pickedSentences, customNote, target, formatVisitDateTime(date, time), settings.managerName),
           apiKey: settings.claudeApiKey,
         }),
       })
