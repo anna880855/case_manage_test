@@ -129,7 +129,7 @@ function NewCaseModal({ onClose }: { onClose: () => void }) {
   }
 
   const handleSubmit = async () => {
-    if (!pendingCase && !form.name.trim()) return
+    if (!pendingCase && (!form.name.trim() || !form.caseNumber.trim())) return
     setSaving(true)
     setSyncError('')
     const newCase: Case = pendingCase || {
@@ -214,7 +214,16 @@ function NewCaseModal({ onClose }: { onClose: () => void }) {
                 autoFocus
               />
             </div>
-            <Field label="個案編號" field="caseNumber" value={form.caseNumber} onChange={set} placeholder="選填" />
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">個案編號 <span className="text-red-400">*</span></label>
+              <input
+                type="text"
+                value={form.caseNumber}
+                onChange={e => set('caseNumber', e.target.value)}
+                placeholder="請輸入個案編號"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa]"
+              />
+            </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">狀態</label>
               <select
@@ -288,7 +297,7 @@ function NewCaseModal({ onClose }: { onClose: () => void }) {
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!form.name.trim() || saving || !!duplicateNotice}
+            disabled={(!pendingCase && (!form.name.trim() || !form.caseNumber.trim())) || saving || !!duplicateNotice}
             className="flex-1 py-2.5 bg-[#7a9985] text-white rounded-xl text-sm font-medium hover:bg-[#6b8a76] disabled:opacity-40 transition-colors"
           >
             {saving ? '儲存中...' : syncError ? '重試同步' : '新增個案'}
