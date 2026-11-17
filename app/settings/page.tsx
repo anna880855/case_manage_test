@@ -239,6 +239,19 @@ export default function SettingsPage() {
         </p>
       </div>
 
+      {/* Care goal instruction */}
+      <div className="bg-white rounded-xl border border-gray-100 p-6 mb-5">
+        <h3 className="font-semibold text-gray-700 mb-1">照顧目標 AI 預設指令</h3>
+        <p className="text-xs text-gray-400 mb-3">家訪產生短、中、長期目標時，每次都會套用此指令。</p>
+        <textarea
+          value={settings.goalInstruction ?? ''}
+          onChange={e => updateSettings({ goalInstruction: e.target.value })}
+          rows={4}
+          placeholder="例：目標句型以「個案能…」開頭；長期目標著重照顧者負荷…"
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa] resize-y"
+        />
+      </div>
+
       {/* Sentence Management */}
       <div className="bg-white rounded-xl border border-gray-100 p-6">
         <div className="flex items-center justify-between mb-1">

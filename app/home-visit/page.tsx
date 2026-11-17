@@ -259,6 +259,7 @@ function HomeVisitContent() {
 
   // ── Care goals
   const [careGoals, setCareGoals] = useState({ short: '', mid: '', long: '' })
+  const [goalExtraInstruction, setGoalExtraInstruction] = useState('')
   const [goalSyncing, setGoalSyncing] = useState(false)
   const [goalSynced, setGoalSynced] = useState(false)
   // ── Care Plan
@@ -623,16 +624,37 @@ ${AI_STYLE_GUIDE}
   const handleGenGoals = () => withError(async () => {
     setGenGoals(true)
     try {
-      const prompt = `你是一位專業長照個案管理師，請根據以下個案摘述與問題，產生短期（3個月）、中期（6個月）、長期（1年以上）的照顧目標，各一句，以繁體中文輸出。
+      const serviceLines = [
+        serviceEnabled && services.length > 0
+          ? `照顧及專業服務：${services.map(s => `${s.code}[${s.name}] ${s.units}單位/月`).join('；')}` : '',
+        transportEnabled ? `交通接送：DA01[交通接送]，至${transportHospital || '醫療院所'}` : '',
+        aidsDetail && aidsDetail !== '暫無需求' ? `輔具及居家無障礙環境改善：${aidsDetail}` : '',
+        respiteEnabled && respiteItems.length > 0
+          ? `喘息服務：${respiteItems.map(i => `${i.prefix || 'GA'}${i.code}[${i.name}]`).join('；')}` : '',
+        referral && referral !== '暫無' ? `轉介資源：${referral}` : '',
+      ].filter(Boolean)
+      const orgInstruction = (settings.goalInstruction ?? '').trim()
+      const extraInstruction = goalExtraInstruction.trim()
+
+      const prompt = `你是一位專業長照個案管理師，請根據以下資料，產生短期（3個月）、中期（6個月）、長期（1年以上）的照顧目標，各一句，以繁體中文輸出。
 
 疾病史：${diseaseGenerated || '（未產生）'}
 個案狀況：${caseGenerated || '（未產生）'}
 照顧者評估：${caregiverGenerated || caregiverInput || '（未填）'}
 主要問題：${rankedProblems.join('、') || '（未選）'}
+已安排長照服務：
+${serviceLines.length > 0 ? serviceLines.map(l => `- ${l}`).join('\n') : '（尚未安排）'}
 
+目標撰寫原則：
+1. 可達成：依個案疾病、功能與照顧資源設定實際可達成的程度，不寫絕對化目標（如「完全不跌倒」、「完全恢復」、「不再失禁」），改以「降低」、「減少」、「維持」、「在協助下能完成」等方式描述。
+2. 可評值：盡量包含次數、頻率、時間或可觀察的行為，讓下次訪視可判斷是否達成。
+3. 與長照服務相關：目標須為長照服務介入可影響的成果，不寫純醫療目標（如血壓、血糖數值、疾病治癒）。
+4. 對應服務：已安排的每一項服務都須被至少一個目標涵蓋，並在該目標句末以括號註明服務代碼，例如「（BA07、DA01）」；若尚未安排服務，依主要問題撰寫，不註明代碼。
+5. 短中長期遞進：短期處理最迫切問題並建立服務，中期穩定功能與照顧模式，長期維持居家生活穩定與照顧者負荷可承受。
+${orgInstruction ? `\n機構預設指令（須遵守）：\n${orgInstruction}\n` : ''}${extraInstruction ? `\n本次補充指令（最優先遵守）：\n${extraInstruction}\n` : ''}
 ${AI_STYLE_GUIDE}
 
-請以以下格式輸出：
+請以以下格式輸出，每個目標只寫一行：
 短期目標：（內容）
 中期目標：（內容）
 長期目標：（內容）`
@@ -1632,6 +1654,21 @@ ${problemSection}
                     )}
                   </div>
                 )}
+
+                {!(serviceEnabled && services.length > 0) && !transportEnabled && !(respiteEnabled && respiteItems.length > 0) && (
+                  <p className="mb-3 text-xs text-amber-600">尚未在「照顧計畫」安排服務，AI 目標將無法對應服務代碼。建議先填照顧計畫再產生。</p>
+                )}
+
+                <div className="mb-3">
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">本次補充指令（選填）</label>
+                  <textarea
+                    value={goalExtraInstruction}
+                    onChange={e => setGoalExtraInstruction(e.target.value)}
+                    rows={2}
+                    placeholder="例：本案以照顧者減壓為主；短期目標著重夜間如廁安全…"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa] resize-none"
+                  />
+                </div>
 
                 <div className="flex justify-end mb-4">
                   <GenButton onClick={handleGenGoals} loading={genGoals} label="✨ AI 產生照顧目標" />

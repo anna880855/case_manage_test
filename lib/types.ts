@@ -274,4 +274,5 @@ export interface Settings {
   referralSheetName: string
   professionalServiceSheetName: string
   sentenceSheetName: string
+  goalInstruction?: string
 }
