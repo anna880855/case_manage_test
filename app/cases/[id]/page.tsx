@@ -113,6 +113,9 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
         guardian: data.fields.guardian || prev.guardian,
         guardianPhone: data.fields.guardianPhone || prev.guardianPhone,
         notes: data.fields.notes || prev.notes,
+        shortGoal: data.fields.shortGoal || prev.shortGoal,
+        midGoal: data.fields.midGoal || prev.midGoal,
+        longGoal: data.fields.longGoal || prev.longGoal,
       }))
     } catch (e: unknown) {
       setParseError(e instanceof Error ? e.message : 'PDF 解析失敗')

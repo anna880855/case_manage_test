@@ -61,6 +61,7 @@ const EMPTY_FORM = {
   name: '', caseNumber: '', phone: '', address: '',
   careLevel: '', guardian: '', guardianPhone: '',
   birthDate: '', disability: '', disabilityExpiry: '', idNumber: '', gender: '', notes: '',
+  shortGoal: '', midGoal: '', longGoal: '',
   status: 'active' as Case['status'],
 }
 
@@ -120,6 +121,9 @@ function NewCaseModal({ onClose }: { onClose: () => void }) {
         guardian: data.fields.guardian || prev.guardian,
         guardianPhone: data.fields.guardianPhone || prev.guardianPhone,
         notes: data.fields.notes || prev.notes,
+        shortGoal: data.fields.shortGoal || prev.shortGoal,
+        midGoal: data.fields.midGoal || prev.midGoal,
+        longGoal: data.fields.longGoal || prev.longGoal,
       }))
     } catch (e: unknown) {
       setParseError(e instanceof Error ? e.message : 'PDF 解析失敗')
@@ -148,6 +152,9 @@ function NewCaseModal({ onClose }: { onClose: () => void }) {
       guardian: form.guardian.trim(),
       guardianPhone: form.guardianPhone.trim(),
       notes: form.notes.trim(),
+      shortGoal: form.shortGoal.trim(),
+      midGoal: form.midGoal.trim(),
+      longGoal: form.longGoal.trim(),
       services: [],
     }
     if (!pendingCase) {
@@ -264,6 +271,36 @@ function NewCaseModal({ onClose }: { onClose: () => void }) {
               <textarea
                 value={form.notes}
                 onChange={e => set('notes', e.target.value)}
+                rows={2}
+                placeholder="選填"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa] resize-none"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-600 mb-1">短期目標</label>
+              <textarea
+                value={form.shortGoal}
+                onChange={e => set('shortGoal', e.target.value)}
+                rows={2}
+                placeholder="選填"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa] resize-none"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-600 mb-1">中期目標</label>
+              <textarea
+                value={form.midGoal}
+                onChange={e => set('midGoal', e.target.value)}
+                rows={2}
+                placeholder="選填"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa] resize-none"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-600 mb-1">長期目標</label>
+              <textarea
+                value={form.longGoal}
+                onChange={e => set('longGoal', e.target.value)}
                 rows={2}
                 placeholder="選填"
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a3bcaa] resize-none"

@@ -15,8 +15,16 @@ const EXTRACT_PROMPT = `這是一份「照顧管理評估量表與照顧計畫�
   "disabilityExpiry": "身心障礙重新鑑定日期，轉換為西元日期 YYYY-MM-DD（民國年+1911），若無重新鑑定日期則留空字串",
   "guardian": "主要照顧者或聯絡人姓名",
   "guardianPhone": "主要照顧者或聯絡人手機",
-  "notes": "簡短摘要個案疾病史與照顧重點，100字以內"
+  "notes": "簡短摘要個案疾病史與照顧重點，100字以內",
+  "shortGoal": "照顧計畫「照顧計畫目標」中的短期目標內容，原文照抄，不含「1.短期目標：」前綴",
+  "midGoal": "照顧計畫「照顧計畫目標」中的中期目標內容，原文照抄，不含「2.中期目標：」前綴",
+  "longGoal": "照顧計畫「照顧計畫目標」中的長期目標內容，原文照抄，不含「3.長期目標：」前綴"
 }
+
+欄位位置提示：
+- careLevel：照顧計畫區塊的「CMS等級」欄位（例：第4級），以最新一次評估為準。
+- birthDate：「需要服務者基本資料」中的「個案生日」（民國年/月/日，例 049/03/07 → 1960-03-07）。
+- 短中長期目標位於「四、照顧計畫目標」段落；PDF 文字中的「⽬」與「目」視為同一字。
 
 找不到的欄位請填空字串 ""。只回傳 JSON。`
 
@@ -39,7 +47,7 @@ export async function POST(req: NextRequest) {
     const client = new Anthropic({ apiKey: key })
     const message = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
+      max_tokens: 4096,
       messages: [{
         role: 'user',
         content: [
